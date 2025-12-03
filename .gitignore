@@ -1,0 +1,35 @@
+# --- 1. データそのものを無視 (最重要) ---
+GRB221009A/
+CALDB/
+data/
+*.evt
+*.pha
+*.arf
+*.rmf
+*.lc
+*.mkf
+*.xcm
+
+# --- 2. 一時ファイル・ログを無視 ---
+*.log
+*.xsl
+session_*.xsl
+temp/
+tmp/
+
+# --- 3. Python関連のゴミを無視 ---
+__pycache__/
+*.pyc
+.venv/
+.env
+.ipynb_checkpoints/
+
+# --- 4. OS/エディタの設定ファイルを無視 ---
+.DS_Store
+.vscode/
+*.swp
+
+# --- 5. 解析結果の画像は管理してもOK (お好みで) ---
+# 画像も管理したくない場合は以下を有効化(コメントアウトを外す)
+# *.png
+# *.pdf

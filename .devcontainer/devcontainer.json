@@ -1,0 +1,37 @@
+{
+  "name": "HEASoft NICER Analysis",
+  "image": "heasoft:v6.36",
+  "workspaceFolder": "/home/heasoft",
+  // ホストのネットワーク設定を引き継ぐ（X11転送などに必要）
+  "runArgs": [
+    "--net=host",
+    "--rm"
+  ],
+  // 環境変数の設定 (CALDB設定などをここに記述)
+  "containerEnv": {
+    "CALDB": "/home/heasoft/CALDB",
+    "GEOMAG_PATH": "/home/heasoft/CALDB/data/gen/pcf/geomag",
+    "DISPLAY": "${localEnv:DISPLAY}"
+  },
+  // フォルダやファイルのマウント設定
+  "mounts": [
+    // CALDBのマウント
+    "source=/home/isseikurihara/HEASoft/CALDB,target=/home/heasoft/CALDB,type=bind",
+    // 解析データディレクトリのマウント
+    "source=/home/isseikurihara/HEASoft/GRB221009A/data_NICER,target=/home/heasoft/data,type=bind",
+    // スクリプトのマウント (個別に指定する場合)
+    "source=/home/isseikurihara/HEASoft/scripts,target=/home/heasoft/scripts,type=bind"
+  ],
+  // VS Codeの拡張機能をコンテナ内に自動インストール
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  },
+  // コンテナ起動後に実行するコマンド（必要であれば）
+  // 今回はcontainerEnvで設定しているので空欄でもOKですが、初期化スクリプトなどがあればここに書きます
+  "postCreateCommand": "echo 'export CALDB=/home/heasoft/CALDB' >> ~/.bashrc && echo 'export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag' >> ~/.bashrc && echo 'Container setup complete.'"
+}
