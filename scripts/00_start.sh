@@ -12,7 +12,6 @@ if [ -d "$obj_dir" ]; then
   --net=host \
   -v ./$obj_dir/data_NICER:/home/heasoft/data \
   -v ./CALDB:/home/heasoft/CALDB \
-  -v ./scripts:/home/heasoft/scripts \
   -e DISPLAY=$DISPLAY \
   heasoft:v6.36 \
   bash -c 'echo "export CALDB=/home/heasoft/CALDB" >> ~/.bashrc && echo "export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag" >> ~/.bashrc && exec bash'

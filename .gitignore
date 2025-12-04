@@ -1,6 +1,7 @@
 # --- 1. データそのものを無視 (最重要) ---
 GRB221009A/
 CALDB/
+backup/
 data/
 *.evt
 *.pha

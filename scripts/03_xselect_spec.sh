@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- ディレクトリリストの読み込み ---
-LIST_FILE="obs_list_test.txt"
+LIST_FILE="scripts/obs_list.txt"
 
 if [ ! -f "$LIST_FILE" ]; then
   echo "Error: List file '${LIST_FILE}' not found."
@@ -19,13 +19,14 @@ echo "  -> Found ${#files[@]} observations."
 
 for obs_dir in "${files[@]}"
 do
-  if [ ! -d "${obs_dir}" ]; then
+  
+  base_dir="data/${obs_dir}"
+  
+  if [ ! -d "${base_dir}" ]; then
     continue
   fi
 
   echo "=== Extracting spectrum: ${obs_dir} ==="
-  
-  base_dir="data/${obs_dir}"
   
   clfile="${base_dir}/xti/event_cl/ni${obs_dir}_0mpu7_cl.evt"
   evtdir="${base_dir}/xti/event_cl"
