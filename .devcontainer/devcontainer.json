@@ -31,5 +31,5 @@
     }
   },
   // 起動時の初期設定
-  "postCreateCommand": "echo 'export CALDB=/home/heasoft/CALDB' >> ~/.bashrc && echo 'export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag' >> ~/.bashrc"
+  "postCreateCommand": "echo 'export CALDB=/home/heasoft/CALDB' >> ~/.bashrc && echo 'export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag' >> ~/.bashrc && . .venv/bin/activate"
 }

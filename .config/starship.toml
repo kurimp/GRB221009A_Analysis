@@ -1,0 +1,43 @@
+# デフォルトではすべてのモジュールが表示されますが、
+# ここで明示的に記述すると、書かれたものだけが表示されます。
+format = """
+$username\
+$hostname\
+$directory\
+$git_branch\
+$git_status\
+$line_break\
+$character"""
+right_format = """$time"""
+# プロンプトの前に空行を入れるか (falseで詰め込む)
+add_newline = true 
+
+# コマンドの実行時間がこのミリ秒を超えたら時間を表示
+command_timeout = 500
+
+[directory]
+truncation_length = 3      # 深さが3階層を超えたら短縮する
+truncation_symbol = "…/"   # 短縮時の記号
+style = "bold cyan"        # 色の設定
+read_only = " 🔒"          # 読み取り専用時の記号
+
+[git_branch]
+symbol = "🌱 "
+style = "bold green"
+
+[git_status]
+conflicted = "🏳"
+ahead = "🏎💨"
+behind = "😰"
+diverged = "😵"
+up_to_date = "✓"
+untracked = "🤷"
+modified = "📝"
+
+[character]
+success_symbol = "[➜](bold green)"      # 成功時
+error_symbol = "[✗](bold red)"          # エラー時
+vimcmd_symbol = "[V](bold green)"       # Vimモード(Normal)時
+
+[python]
+format = "via [Python3: $version]"

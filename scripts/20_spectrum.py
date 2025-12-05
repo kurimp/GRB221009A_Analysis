@@ -56,21 +56,20 @@ def treatment(ObsID, bkgtype="3c50"):
   
   # パラメータ1: nH (10^22 cm^-2)
   # 値, 変化幅, 最小値, 底値, 天井値, 最大値
-  m(1).values = "0.1 0.01 0.0 0.0 100.0 100.0"
+  m(1).values = "1 0.01 0.0 0.0 100.0 100.0"
   
   # パラメータ2: Photon Index (Gamma)
-  m(2).values = "1.7 0.1 0.0 0.0 10.0 10.0"
+  m(2).values = "2 0.1 0.0 0.0 10.0 10.0"
   
   # パラメータ3: Norm
-  # 値を1.0にするが、直後にrenormを行うため仮置き
-  m(3).values = "1.0 0.01 0.0 0.0 1e10 1e10"
+  m(3).values = "2 0.01 0.0 0.0 1e10 1e10"
   
   print("--- Initial Parameters ---")
   m.show()
-
+  
   # ★修正: フィッティング前にデータの強度レベルにモデルを合わせる
   print("--- Pre-adjusting Normalization ---")
-  xspec.Fit.renorm()
+  #xspec.Fit.renorm()
   m.show() # renorm後の値を確認
   
   # --- フィッティング ---
@@ -167,7 +166,7 @@ ax1.set_xscale('log')
 ax1.set_yscale('log')
 #ax1.set_xlabel('Energy (keV)')
 ax1.set_ylabel('Counts s$^{-1}$ keV$^{-1}$')
-ax1.legend()
+ax1.legend(framealpha=0.1)
 ax1.grid(True, which="both", ls="--", alpha=0.3)
 
 ax2.axhline(0,color="black", linestyle='--', alpha=0.5)
