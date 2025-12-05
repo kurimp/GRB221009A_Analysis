@@ -3,175 +3,181 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
+import csv
 
-xspec.AllData.clear()
-xspec.AllModels.clear()
-
-xspec.Fit.statMethod = "chi"
-
-# --- パスの設定 (ご自身の環境に合わせて書き換えてください) ---
 ObsID = "5420250101"
-obs_directory = os.path.join("/home/heasoft/data", ObsID)
-data_filename = f"ni{ObsID}_src.pha"
-arf_filename = f"ni{ObsID}.arf"
-rmf_filename = f"ni{ObsID}.rmf"
-bkg01_filename = f"ni{ObsID}_bkg_3c50.pi"
-bkg02_filename = f"ni{ObsID}_bkg_scorp.pha"
 
-data_file = os.path.join(obs_directory, data_filename)
-arf_file = os.path.join(obs_directory, arf_filename)
-rmf_file = os.path.join(obs_directory, rmf_filename)
-bkg01_file = os.path.join(obs_directory, bkg01_filename)
-bkg02_file = os.path.join(obs_directory, bkg02_filename)
+def treatment(ObsID, bkgtype="3c50"):
+  xspec.AllData.clear()
+  xspec.AllModels.clear()
 
-try:
-  # スペクトルを読み込む
-  load_command = f"1:1 {data_file} 2:2 {data_file}"
-  xspec.AllData(load_command)
+  xspec.Fit.statMethod = "chi"
+  obs_directory = os.path.join("/home/heasoft/data", ObsID)
+  data_filename = f"ni{ObsID}_src.pha"
+  arf_filename = f"ni{ObsID}.arf"
+  rmf_filename = f"ni{ObsID}.rmf"
+  if bkgtype == "3c50":
+    bkg_filename = f"ni{ObsID}_bkg_3c50.pi"
+  elif bkgtype == "scorpion":
+    bkg_filename = f"ni{ObsID}_bkg_scorp.pha"
+  else:
+    print("bkgtype must be either '3c50' or 'scorpion'.")
+
+  data_file = os.path.join(obs_directory, data_filename)
+  arf_file = os.path.join(obs_directory, arf_filename)
+  rmf_file = os.path.join(obs_directory, rmf_filename)
+  bkg_file = os.path.join(obs_directory, bkg_filename)
   
-  # ハンドルを取得
-  s01 = xspec.AllData(1) # Spectrum 1
-  s02 = xspec.AllData(2) # Spectrum 2
+  try:
+    # スペクトルを読み込む
+    s = xspec.Spectrum(data_file)
+    
+    # 統計誤差の設定
+    xspec.AllModels.systematic = 0.01
+    
+    # バックグラウンドを読み込む
+    s.background = bkg_file
+    
+    # レスポンスファイル(rmf/arf)を設定
+    s.response = rmf_file
+    s.response.arf = arf_file
+    
+    print(f"Loaded: {s.fileName}")
+    
+    # 解析するエネルギー範囲を指定 (例: 0.5keV - 10.0keV)
+    s.ignore("**-0.3 10.0-**")
+    
+  except Exception as e:
+    print(f"データ読み込みエラー: {e}")
   
-  # 統計誤差の設定
-  xspec.AllModels.systematic = 0.01
+  # --- モデル定義 (powerlaw) ---
+  print("\n--- 2. Defining Model ---")
+  m = xspec.Model("phabs * powerlaw")
   
-  # バックグラウンドを読み込む
-  s01.background = bkg01_file
-  s02.background = bkg02_file
+  # パラメータ1: nH (10^22 cm^-2)
+  # 値, 変化幅, 最小値, 底値, 天井値, 最大値
+  m(1).values = "0.1 0.01 0.0 0.0 100.0 100.0"
   
-  # レスポンスファイル(rmf/arf)を設定
-  s01.response = rmf_file
-  s01.response.arf = arf_file
-  s02.response = rmf_file
-  s02.response.arf = arf_file
+  # パラメータ2: Photon Index (Gamma)
+  m(2).values = "1.7 0.1 0.0 0.0 10.0 10.0"
   
-  print(f"Loaded S1 (Group {s01.dataGroup}) BKG: {s01.background.fileName}")
-  print(f"Loaded S2 (Group {s02.dataGroup}) BKG: {s02.background.fileName}")
+  # パラメータ3: Norm
+  # 値を1.0にするが、直後にrenormを行うため仮置き
+  m(3).values = "1.0 0.01 0.0 0.0 1e10 1e10"
   
-  # 解析するエネルギー範囲を指定 (例: 0.5keV - 10.0keV)
-  s01.ignore("**-0.3 10.0-**")
-  s02.ignore("**-0.3 10.0-**")
+  print("--- Initial Parameters ---")
+  m.show()
+
+  # ★修正: フィッティング前にデータの強度レベルにモデルを合わせる
+  print("--- Pre-adjusting Normalization ---")
+  xspec.Fit.renorm()
+  m.show() # renorm後の値を確認
   
-except Exception as e:
-  print(f"データ読み込みエラー: {e}")
+  # --- フィッティング ---
+  print("\n--- 3. Fitting ---")
+  xspec.Fit.query = "yes"
+  xspec.Fit.perform()
+  
+  # 結果表示
+  chi2 = xspec.Fit.statistic
+  dof = xspec.Fit.dof
+  red_chi2 = chi2 / dof if dof > 0 else 0
+  
+  print("\n--- Fit Result ---")
+  print(f"Chi-Squared: {chi2:.2f}")
+  print(f"Reduced Chi-Squared: {red_chi2:.2f}")
+  
+  # パラメータ取得
+  val_nh = m.phabs.nH.values[0]
+  val_gamma = m.powerlaw.PhoIndex.values[0]
+  val_flux = m.powerlaw.norm.values[0]
+  
+  print(f"Best-fit nH: {val_nh:.4f}")
+  print(f"Best-fit Gamma: {val_gamma:.4f}")
+  print(f"Flux (0.5-10keV): {val_flux:.4f} (10^-12 erg/cm2/s)")
+  
+  # エラーの計算
+  try:
+    print("Calculating errors...")
+    # パラメータ1(nH) と パラメータ2(Gamma) のエラーを計算
+    # "1 2" はパラメータ番号
+    xspec.Fit.error("1 2 3")
+    
+    # 結果の取得
+    # error[0]=lower limit, error[1]=upper limit
+    nh_err = m.phabs.nH.error 
+    gamma_err = m.powerlaw.PhoIndex.error
+    
+    print(f"\nnH Error: {m.phabs.nH.error[0]:.4f} - {m.phabs.nH.error[1]:.4f}")
+    print(f"Gamma Error: {m.powerlaw.PhoIndex.error[0]:.4f} - {m.powerlaw.PhoIndex.error[1]:.4f}")
+    print(f"Flux Error: {m.powerlaw.norm.error[0]:.4f} - {m.powerlaw.norm.error[1]:.4f}")
+  except Exception as e:
+    print(f"\nError calculation skipped (Chi-Sq too high): {e}")
 
-# --- モデル定義 (powerlaw) ---
-print("\n--- 2. Defining Model (powerlaw) ---")
-m = xspec.Model("phabs * powerlaw")
+  # XSPECからプロット用データを取得
+  xspec.Plot.xAxis = "keV"
+  xspec.Plot("data") # data, model, residualsなどを準備
 
-# === パラメータ設定 ===
-m(1).values = 1.0
-m(2).values = 1.5
-m(3).values = 1.0
+  # データの取得
+  x_vals = xspec.Plot.x()
+  x_err = xspec.Plot.xErr()
+  y_net = xspec.Plot.y()
+  y_err = xspec.Plot.yErr()
+  m_vals = xspec.Plot.model()
 
-#m(4).link = ""
-#m(4).values = 1.0
-#m(5).link = ""
-#m(5).values = 1.5
-#m(6).link = ""
-#m(6).values = 1.0
+  xspec.Plot('Background')
+  y_bkg  = xspec.Plot.y()
 
-# モデル確認
-m.show()
-
-# --- フィッティング ---
-print("\n--- 3. Fitting ---")
-xspec.Fit.query = "yes"
-xspec.Fit.perform()
-
-# 結果表示
-chi2 = xspec.Fit.statistic
-dof = xspec.Fit.dof
-red_chi2 = chi2 / dof if dof > 0 else 0
-
-print(f"\nReduced Chi-Squared: {red_chi2:.2f}")
-
-# --- エラー計算 ---
-try:
-    print("\nCalculating errors for ALL parameters (1-6)...")
-    # Group 1 (1-3) と Group 2 (4-6) 両方のエラーを計算
-    xspec.Fit.error("1 2 3 4 5 6")
-except Exception as e:
-    print(f"Error calc skipped: {e}")
-
-# --- 値の比較表示 ---
-print("\n=== Comparison (3C50 vs SCORPEON) ===")
-print(f"{'Param':<8} | {'3C50 (Spec1)':<20} | {'SCORPEON (Spec2)':<20}")
-print("-" * 55)
-
-# 値とエラーを取り出して表示する関数
-def get_val_err(idx):
-    val = m(idx).values[0]
-    # error計算が走っていない場合は (0,0) になる
-    err_l = m(idx).error[0]
-    err_h = m(idx).error[1]
-    return f"{val:.4f} ({err_l:.3f}-{err_h:.3f})"
-
-print(f"nH       | {get_val_err(1):<20} | {get_val_err(1):<20}")
-print(f"Gamma    | {get_val_err(2):<20} | {get_val_err(2):<20}")
-print(f"Norm     | {get_val_err(3):<20} | {get_val_err(3):<20}")
-print("-" * 55)
-
-# XSPECからプロット用データを取得
-xspec.Plot.xAxis = "keV"
-xspec.Plot("data") # data, model, residualsなどを準備
-
-# データの取得
-x1_vals = xspec.Plot.x(1)
-x1_err = xspec.Plot.xErr(1)
-y1_net = xspec.Plot.y(1)
-y1_err = xspec.Plot.yErr(1)
-m1_vals = xspec.Plot.model(1)
-x2_vals = xspec.Plot.x(2)
-x2_err = xspec.Plot.xErr(2)
-y2_net = xspec.Plot.y(2)
-y2_err = xspec.Plot.yErr(2)
-m2_vals = xspec.Plot.model(2)
-
-xspec.Plot('Background')
-y1_bkg  = xspec.Plot.y(1)
-y2_bkg  = xspec.Plot.y(2)
-
-y_tot = [n + b for n, b in zip(y1_net, y1_bkg)]
+  y_tot = [n + b for n, b in zip(y_net, y_bkg)]
+  
+  return ObsID, bkgtype, x_vals, x_err, y_net, y_err, y_bkg, y_tot, m_vals, red_chi2
 
 # Matplotlibで描画
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+plt.subplots_adjust(hspace=0.0)
 
-# 1. 観測データ (対数軸の方が見やすい場合が多いです)
-ax1.errorbar(x1_vals, y_tot, fmt='.', label='Total', alpha=0.3)
-ax1.errorbar(x1_vals, y1_net, yerr=y1_err, fmt='.', label='Net(3C50)', alpha=0.3)
-ax1.step(x1_vals, y1_bkg, where='mid', label='Background(3C50)', alpha=0.3)
-ax1.errorbar(x2_vals, y2_net, yerr=y2_err, fmt='.', label='Net(scorpion)', alpha=0.3)
-ax1.step(x2_vals, y2_bkg, where='mid', label='Background(scorpion)', alpha=0.3)
+for bkgtype in ["3c50", "scorpion"]:
+  if bkgtype=="scorpion":
+    pass
+  ObsID, bkgtype, x_vals, x_err, y_net, y_err, y_bkg, y_tot, m_vals, red_chi2 = treatment(ObsID, bkgtype)
+  
+  # 1. 観測データ (対数軸の方が見やすい場合が多いです)
+  ax1.errorbar(x_vals, y_tot, fmt='.', label='Total', alpha=0.3)
+  ax1.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
+  ax1.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
+  
+  # 2. モデル
+  ax1.plot(x_vals, m_vals, label=f'Best-fit Model({bkgtype})(Reduced chi2:{red_chi2:.2f})', linewidth=2)
+  
+  # --- 下段: 残差 (Residuals) ---
+  # (データ - モデル) / 誤差 = シグマ単位のズレ
+  residuals = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y_net, m_vals, y_err)]
+  
+  row_data = list(zip(*[x_vals, y_tot, y_net, m_vals, y_err]))
+  ax2.errorbar(x_vals, residuals, fmt='.', alpha=0.6, label=f"esiduals({bkgtype})")
+  import csv
+  with open(f'results/result({bkgtype}).csv', 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(['x_vals', 'y_tot', 'y_net', 'm_vals', 'y_err'])
+    writer.writerows(row_data)
 
-# 2. モデル
-#ax1.plot(x1_vals, m1_vals, label='Best-fit Model(3c50)', color='red', linewidth=2)
-#ax1.plot(x2_vals, m2_vals, label='Best-fit Model(scorpion)', color='red', linewidth=2)
+fig.suptitle(f'GRB221009A NICER Spectrum Fit')
 
-# グラフの装飾
 ax1.set_xscale('log')
 ax1.set_yscale('log')
-ax1.set_xlabel('Energy (keV)', fontsize=14)
-ax1.set_ylabel('Counts s$^{-1}$ keV$^{-1}$', fontsize=14)
-ax1.set_title(f'NICER Spectrum Fit (Reduced Chi2: {xspec.Fit.statistic / xspec.Fit.dof:.2f})')
+#ax1.set_xlabel('Energy (keV)')
+ax1.set_ylabel('Counts s$^{-1}$ keV$^{-1}$')
 ax1.legend()
 ax1.grid(True, which="both", ls="--", alpha=0.3)
 
-# --- 下段: 残差 (Residuals) ---
-# (データ - モデル) / 誤差 = シグマ単位のズレ
-residuals1 = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y1_net, m1_vals, y1_err)]
-residuals2 = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y2_net, m2_vals, y2_err)]
-
-ax2.errorbar(x1_vals, residuals1, yerr=1.0, fmt='.', alpha=0.6)
-ax2.errorbar(x1_vals, residuals2, yerr=1.0, fmt='.', alpha=0.6)
-ax2.axhline(0, color='red', linestyle='--') # ゼロライン
-ax2.set_ylabel('(Data-Model)/Error', fontsize=10)
-ax2.set_xlabel('Energy (keV)', fontsize=12)
-ax2.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
+ax2.axhline(0,color="black", linestyle='--', alpha=0.5)
 ax2.set_xscale('log')
+ax2.set_ylabel('(Data-Model)/Error')
+ax2.set_xlabel('Energy (keV)')
+#ax2.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
+ax2.legend()
 ax2.grid(True, which="both", ls=":", alpha=0.5)
 
 # 保存
 fig.savefig("results/spectrum_fit.png")
-print("\nグラフを 'spectrum_fit.png' に保存しました。")
+print("\nグラフを 'results/spectrum_fit.png' に保存しました。")
