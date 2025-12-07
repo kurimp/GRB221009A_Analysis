@@ -35,6 +35,12 @@ WORKDIR /workspaces/HEASoft
 
 # --- 便利ツールのセットアップ ---
 
+COPY setup_log.sh /home/heasoft/.setup_log.sh
+
+RUN sudo chown heasoft /home/heasoft/.setup_log.sh \
+    && chmod +x /home/heasoft/.setup_log.sh \
+    && echo 'source $HOME/.setup_log.sh' >> ~/.bashrc
+
 # 1. Starship (プロンプト) のインストール
 RUN curl -sS https://starship.rs/install.sh | sudo sh -s -- -y \
     && echo 'eval "$(starship init bash)"' >> ~/.bashrc

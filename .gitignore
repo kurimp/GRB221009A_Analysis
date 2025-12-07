@@ -3,6 +3,7 @@ GRB221009A/
 CALDB/
 backup/
 data/
+terminal_logs/
 *.evt
 *.pha
 *.arf
