@@ -7,7 +7,7 @@ import csv
 
 ObsID = "5410670110"
 
-tf_scorpion = False
+tf_scorpion = True
 
 OUTPUT_DIR = f"results/{ObsID}"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -170,7 +170,7 @@ for bkgtype in ["3c50", "scorpion"]:
       writer.writerow(['x_vals', 'y_tot', 'y_net', 'm_vals', 'y_err'])
       writer.writerows(row_data)
 
-fig.suptitle(f'GRB221009A NICER Spectrum Fit')
+fig.suptitle(f'GRB221009A NICER Spectrum Fit:ObsID{ObsID}')
 
 ax1.set_xscale('log')
 ax1.set_yscale('log')
