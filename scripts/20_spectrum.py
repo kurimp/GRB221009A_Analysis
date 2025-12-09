@@ -5,9 +5,11 @@ import matplotlib.pyplot as plt
 import os
 import csv
 
-ObsID = "5420250101"
+ObsID = "5410670110"
 
-OUTPUT_DIR = "results"
+tf_scorpion = False
+
+OUTPUT_DIR = f"results/{ObsID}"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # 比較したいモデルのリスト
@@ -140,7 +142,10 @@ plt.subplots_adjust(hspace=0.0)
 
 for bkgtype in ["3c50", "scorpion"]:
   if bkgtype=="scorpion":
-    continue
+    if tf_scorpion:
+      pass
+    else:
+      continue
   x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(load_data(ObsID, bkgtype))
   
   ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
@@ -160,7 +165,7 @@ for bkgtype in ["3c50", "scorpion"]:
     ax2.errorbar(x_vals, residuals, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})")
     
     row_data = list(zip(*[x_vals, y_tot, y_net, m_vals, y_err]))
-    with open(f'results/result({bkgtype})({name}).csv', 'w', newline='') as f:
+    with open(f'{OUTPUT_DIR}/result({bkgtype})({name}).csv', 'w', newline='') as f:
       writer = csv.writer(f)
       writer.writerow(['x_vals', 'y_tot', 'y_net', 'm_vals', 'y_err'])
       writer.writerows(row_data)
@@ -181,5 +186,10 @@ ax2.set_xlabel('Energy (keV)')
 ax2.legend(framealpha=0.1)
 ax2.grid(True, which="both", ls=":", alpha=0.5)
 
-fig.savefig("results/spectrum_fit.png")
-print("\nグラフを 'results/spectrum_fit.png' に保存しました。")
+if tf_scorpion:
+  figure_path = os.path.join(OUTPUT_DIR, "spectrum_fit.png")
+else:
+  figure_path = os.path.join(OUTPUT_DIR, "spectrum_fit(without Scorpion).png")
+
+fig.savefig(figure_path)
+print(f"\nグラフを '{figure_path}' に保存しました。")
