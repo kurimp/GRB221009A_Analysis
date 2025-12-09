@@ -35,12 +35,13 @@ def load_data(ObsID, bkgtype="3c50"):
 
   xspec.Fit.statMethod = "chi"
   obs_directory = os.path.join("/home/heasoft/data", ObsID)
-  data_filename = f"ni{ObsID}_src.pha"
   arf_filename = f"ni{ObsID}.arf"
   rmf_filename = f"ni{ObsID}.rmf"
   if bkgtype == "3c50":
+    data_filename = f"ni{ObsID}_tot.pi"
     bkg_filename = f"ni{ObsID}_bkg_3c50.pi"
   elif bkgtype == "scorpion":
+    data_filename = f"ni{ObsID}_src.pha"
     bkg_filename = f"ni{ObsID}_bkg_scorp.pha"
   else:
     print("bkgtype must be either '3c50' or 'scorpion'.")
@@ -115,7 +116,7 @@ plt.subplots_adjust(hspace=0.0)
 
 for bkgtype in ["3c50", "scorpion"]:
   if bkgtype=="scorpion":
-    continue
+    pass
   x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(load_data(ObsID, bkgtype))
   
   ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
