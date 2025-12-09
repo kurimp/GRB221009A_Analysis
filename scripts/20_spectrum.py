@@ -7,6 +7,9 @@ import csv
 
 ObsID = "5420250101"
 
+OUTPUT_DIR = "results"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 # 比較したいモデルのリスト
 # "モデル名": { "expr": "XSPECの式", "params": { パラメータ番号: "初期値設定文字列" } }
 MODELS = {
@@ -25,6 +28,25 @@ MODELS = {
       2: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma
       3: "1.0 1.0 0.1 0.1 500.0 500.0",  # HighECut (keV)
       4: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm
+    }
+  },
+  "ZPL": {
+    "expr": "ztbabs * powerlaw",
+    "params": {
+      1: "0.5 0.1 0.0 0.0 100.0 100.0",   # nH (ztbabsの1番目)
+      2: "0.151 -0.01 0.0 0.0 10.0 10.0",    # Redshift (ztbabsの2番目) ★追加
+      3: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma (powerlawの1番目 -> 全体で3番目)
+      4: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm (powerlawの2番目 -> 全体で4番目)
+    }
+  },
+  "ZCutoffPL": {
+    "expr": "ztbabs * cutoffpl",
+    "params": {
+      1: "0.5 0.1 0.0 0.0 100.0 100.0",   # nH
+      2: "0.151 -0.01 0.0 0.0 10.0 10.0",    # Redshift ★追加
+      3: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma
+      4: "1.0 1.0 0.1 0.1 500.0 500.0",   # HighECut
+      5: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm
     }
   }
 }
@@ -90,6 +112,7 @@ def run_fit(model_config):
   red_chi2 = chi2 / dof if dof > 0 else 0
   
   xspec.Plot.xAxis = "keV"
+  xspec.Plot.area = True
   xspec.Plot("data")
   m_vals = xspec.Plot.model()
   
@@ -97,6 +120,7 @@ def run_fit(model_config):
 
 def treat_data(s):
   xspec.Plot.xAxis = "keV"
+  xspec.Plot.area = True
   xspec.Plot("data")
   x_vals = xspec.Plot.x()
   x_err = xspec.Plot.xErr()
@@ -116,7 +140,7 @@ plt.subplots_adjust(hspace=0.0)
 
 for bkgtype in ["3c50", "scorpion"]:
   if bkgtype=="scorpion":
-    pass
+    continue
   x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(load_data(ObsID, bkgtype))
   
   ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
