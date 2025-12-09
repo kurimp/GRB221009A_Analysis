@@ -27,7 +27,7 @@ if [[ $- == *i* ]] && [[ -z "$SCRIPT_LOGGING" ]]; then
   sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g" "$RAW_LOG" | sed 's/\r$//' > "$CLEAN_LOG"
   
   # 3. 元の色付きログが不要なら削除する (残したい場合はコメントアウトしてください)
-  # rm "$RAW_LOG"
+  rm "$RAW_LOG"
   
   echo "--- Log saved (cleaned): $CLEAN_LOG ---"
   exit
