@@ -39,6 +39,7 @@ do
   
   # 出力ファイル名
   bkg_3c50="${obs_dir}/ni${obs_dir}_bkg_3c50"
+  totspec="${obs_dir}/ni${obs_dir}_tot"
   out_scorp="${base_dir}/ni${obs_dir}_bkg_scorp.pha"
 
   # --- 1. nibackgen3C50 (3C50モデル) ---
@@ -51,8 +52,8 @@ do
                 bkgidxdir="CALDB" \
                 bkglibdir="CALDB" \
                 gainepoch="AUTO" \
-                bkgspec="${bkg_3c50}" \
-                totspec="${obs_dir}/ni${obs_dir}_tot" \
+                bkgspec=${bkg_3c50} \
+                totspec=${totspec} \
                 dtmin=10.0 dtmax=120.0 \
                 clobber=yes
 

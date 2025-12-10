@@ -2,7 +2,6 @@
   "name": "HEASoft Analysis Environment",
   // "image": "heasoft:v6.36",
   "runArgs": [
-    "--net=host",
     "--rm"
   ],
   "build": {
@@ -10,8 +9,7 @@
   },
   "containerEnv": {
     "CALDB": "/home/heasoft/CALDB",
-    "GEOMAG_PATH": "/home/heasoft/CALDB/data/gen/pcf/geomag",
-    "DISPLAY": "${localEnv:DISPLAY}"
+    "GEOMAG_PATH": "/home/heasoft/CALDB/data/gen/pcf/geomag"
   },
   "mounts": [
     // 1. CALDBのマウント
