@@ -7,15 +7,14 @@ import csv
 import sys
 
 #使用するObsIDを選択。
-#ObsID = "5410670110"
-ObsID = "5420250101"
+ObsID = "5410670110"
+#ObsID = "5420250101"
 
 #scorpionでのbackgroundを扱うかどうかを選択。使うならTrue。
 tf_scorpion = False
 
 #特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
 only_model = None
-
 
 OUTPUT_DIR = f"results/{ObsID}"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -162,7 +161,7 @@ def treat_data(s):
   
   return x_vals, x_err, y_net, y_err, y_bkg, y_tot
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
 plt.subplots_adjust(hspace=0.0)
 
 for bkgtype in ["3c50", "scorpion"]:
@@ -205,7 +204,7 @@ fig.suptitle(f'GRB221009A NICER Spectrum Fit:ObsID{ObsID}')
 ax1.set_xscale('log')
 ax1.set_yscale('log')
 ax1.set_ylabel(r'Energy Flux ($E^2 F_E$) [keV$^2$ (photons cm$^{-2}$ s$^{-1}$ keV$^{-1}$)]')
-ax1.legend(framealpha=0.1)
+ax1.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
 ax1.grid(True, which="both", ls="--", alpha=0.3)
 
 ax2.axhline(0,color="black", linestyle='--', alpha=0.5)
@@ -213,7 +212,7 @@ ax2.set_xscale('log')
 ax2.set_ylabel('(Data-Model)/Error')
 ax2.set_xlabel('Energy (keV)')
 #ax2.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
-ax2.legend(framealpha=0.1)
+ax2.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
 ax2.grid(True, which="both", ls=":", alpha=0.5)
 
 if tf_scorpion:
