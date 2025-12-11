@@ -4,10 +4,18 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 import csv
+import sys
 
+#使用するObsIDを選択。
 ObsID = "5410670110"
+#ObsID = "5420250101"
 
-tf_scorpion = True
+#scorpionでのbackgroundを扱うかどうかを選択。使うならTrue。
+tf_scorpion = False
+
+#特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
+only_model = None
+
 
 OUTPUT_DIR = f"results/{ObsID}"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -52,6 +60,16 @@ MODELS = {
     }
   }
 }
+
+if only_model is not None:
+  if type(only_model) is not list:
+    print(f"ERROR: 'only_model' must be a list of model names or None. Found type: {type(only_model).__name__}")
+    sys.exit(1)
+  for model_name in only_model:
+    if model_name not in MODELS.keys():
+      print(f"WARNING: Model '{model_name}' specified in 'only_model' is not defined in MODELS.")
+      print(f"Available models are: {', '.join(MODELS.keys())}")
+      sys.exit(1)
 
 def load_data(ObsID, bkgtype="3c50"):
   xspec.AllData.clear()
@@ -114,16 +132,21 @@ def run_fit(model_config):
   red_chi2 = chi2 / dof if dof > 0 else 0
   
   xspec.Plot.xAxis = "keV"
-  xspec.Plot.area = True
-  xspec.Plot("data")
+  #xspec.Plot.area = True <-eeufspecでは不要らしい
+  xspec.Plot("eeufspec")
   m_vals = xspec.Plot.model()
   
   return m, chi2, red_chi2, m_vals
 
 def treat_data(s):
+  
+  print("Defining dummy model for unfolding...")
+  m_dummy = xspec.Model("powerlaw")
+  m_dummy.powerlaw.PhoIndex = 2.0
+  m_dummy.powerlaw.norm = 1.0
   xspec.Plot.xAxis = "keV"
-  xspec.Plot.area = True
-  xspec.Plot("data")
+  #xspec.Plot.area = True <-eeufspecでは不要らしい
+  xspec.Plot("eeufspec")
   x_vals = xspec.Plot.x()
   x_err = xspec.Plot.xErr()
   y_net = xspec.Plot.y()
@@ -134,6 +157,8 @@ def treat_data(s):
   y_bkg  = xspec.Plot.y()
   
   y_tot = [n + b for n, b in zip(y_net, y_bkg)]
+  
+  xspec.AllModels.clear()
   
   return x_vals, x_err, y_net, y_err, y_bkg, y_tot
 
@@ -153,7 +178,12 @@ for bkgtype in ["3c50", "scorpion"]:
   ax1.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
   
   for i, (name, config) in enumerate(MODELS.items()):
-    pass
+    if only_model == None:
+      pass
+    else:
+      if name not in only_model:
+        pass
+    
     m, chi2, red_chi2, m_vals = run_fit(config)
     
     print(f"[{name}] Red.Chi2: {red_chi2:.2f}")
@@ -174,7 +204,7 @@ fig.suptitle(f'GRB221009A NICER Spectrum Fit:ObsID{ObsID}')
 
 ax1.set_xscale('log')
 ax1.set_yscale('log')
-ax1.set_ylabel('Counts s$^{-1}$ keV$^{-1}$')
+ax1.set_ylabel(r'Energy Flux ($E^2 F_E$) [keV$^2$ (photons cm$^{-2}$ s$^{-1}$ keV$^{-1}$)]')
 ax1.legend(framealpha=0.1)
 ax1.grid(True, which="both", ls="--", alpha=0.3)
 
