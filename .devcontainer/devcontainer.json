@@ -17,7 +17,7 @@
     
     // 2. 重たい観測データのマウント (Git管理外の安全地帯)
     // ここがコンテナ内の /home/heasoft/data になります
-    "source=/home/isseikurihara/HEASoft/GRB221009A/data_NICER,target=/home/heasoft/data,type=bind"
+    "source=/home/isseikurihara/HEASoft/data_container/GRB221009A,target=/home/heasoft/data,type=bind"
   ],
   "customizations": {
     "vscode": {
