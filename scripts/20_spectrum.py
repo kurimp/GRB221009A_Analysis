@@ -7,8 +7,8 @@ import csv
 import sys
 
 #使用するObsIDを選択。
-ObsID = "5410670110"
-#ObsID = "5420250101"
+#ObsID = "5410670110"
+ObsID = "5420250101"
 
 #scorpionでのbackgroundを扱うかどうかを選択。使うならTrue。
 tf_scorpion = False
@@ -195,7 +195,7 @@ for bkgtype in ["3c50", "scorpion"]:
     ax2.errorbar(x_vals, residuals, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})")
     
     row_data = list(zip(*[x_vals, y_tot, y_net, m_vals, y_err]))
-    with open(f'{OUTPUT_DIR}/result({bkgtype})({name}).csv', 'w', newline='') as f:
+    with open(f'{OUTPUT_DIR}/{ObsID}_{bkgtype}_{name}.csv', 'w', newline='') as f:
       writer = csv.writer(f)
       writer.writerow(['x_vals', 'y_tot', 'y_net', 'm_vals', 'y_err'])
       writer.writerows(row_data)
@@ -217,9 +217,9 @@ ax2.legend(framealpha=0.1)
 ax2.grid(True, which="both", ls=":", alpha=0.5)
 
 if tf_scorpion:
-  figure_path = os.path.join(OUTPUT_DIR, "spectrum_fit.png")
+  figure_path = os.path.join(OUTPUT_DIR, f"{ObsID}.png")
 else:
-  figure_path = os.path.join(OUTPUT_DIR, "spectrum_fit(without Scorpion).png")
+  figure_path = os.path.join(OUTPUT_DIR, f"{ObsID}_noScorpion.png")
 
 fig.savefig(figure_path)
 print(f"\nグラフを '{figure_path}' に保存しました。")
