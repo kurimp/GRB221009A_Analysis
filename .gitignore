@@ -4,6 +4,7 @@ CALDB/
 backup/
 data_container/
 terminal_logs/
+results/
 *.evt
 *.pha
 *.arf
