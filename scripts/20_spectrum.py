@@ -6,18 +6,21 @@ import os
 import csv
 import sys
 
+#===========config===========
+#plotのy軸表記選択。FluxならTrue。
+tf_eeufspec = False
+
 #使用するObsIDを選択。
 ObsID = "5410670110"
 #ObsID = "5420250101"
 
 #scorpionでのbackgroundを扱うかどうかを選択。使うならTrue。
-tf_scorpion = False
+tf_scorpion = True
 
 #特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
-only_model = None
+only_model = ["ZCutoffPL"]
 
 OUTPUT_DIR = f"results/{ObsID}"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # 比較したいモデルのリスト
 # "モデル名": { "expr": "XSPECの式", "params": { パラメータ番号: "初期値設定文字列" } }
@@ -59,6 +62,10 @@ MODELS = {
     }
   }
 }
+
+#======================
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 if only_model is not None:
   if type(only_model) is not list:
@@ -131,21 +138,28 @@ def run_fit(model_config):
   red_chi2 = chi2 / dof if dof > 0 else 0
   
   xspec.Plot.xAxis = "keV"
-  #xspec.Plot.area = True <-eeufspecでは不要らしい
-  xspec.Plot("eeufspec")
+  if tf_eeufspec:
+    xspec.Plot("eeufspec")
+  elif not tf_eeufspec:
+    xspec.Plot.area = True
+    xspec.Plot("data")
+  
   m_vals = xspec.Plot.model()
   
   return m, chi2, red_chi2, m_vals
 
 def treat_data(s):
-  
-  print("Defining dummy model for unfolding...")
-  m_dummy = xspec.Model("powerlaw")
-  m_dummy.powerlaw.PhoIndex = 2.0
-  m_dummy.powerlaw.norm = 1.0
   xspec.Plot.xAxis = "keV"
-  #xspec.Plot.area = True <-eeufspecでは不要らしい
-  xspec.Plot("eeufspec")
+  if tf_eeufspec:
+    print("Defining dummy model for unfolding...")
+    m_dummy = xspec.Model("powerlaw")
+    m_dummy.powerlaw.PhoIndex = 2.0
+    m_dummy.powerlaw.norm = 1.0
+    xspec.Plot("eeufspec")
+  elif not tf_eeufspec:
+    xspec.Plot.area = True
+    xspec.Plot("data")
+  
   x_vals = xspec.Plot.x()
   x_err = xspec.Plot.xErr()
   y_net = xspec.Plot.y()
@@ -173,7 +187,8 @@ for bkgtype in ["3c50", "scorpion"]:
   x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(load_data(ObsID, bkgtype))
   
   ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
-  ax1.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
+  ax1.errorbar(x_vals, y_net, yerr=0, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
+  #ax1.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
   ax1.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
   
   for i, (name, config) in enumerate(MODELS.items()):
@@ -181,7 +196,7 @@ for bkgtype in ["3c50", "scorpion"]:
       pass
     else:
       if name not in only_model:
-        pass
+        continue
     
     m, chi2, red_chi2, m_vals = run_fit(config)
     
@@ -203,7 +218,12 @@ fig.suptitle(f'GRB221009A NICER Spectrum Fit:ObsID{ObsID}')
 
 ax1.set_xscale('log')
 ax1.set_yscale('log')
-ax1.set_ylabel(r'Energy Flux ($E^2 F_E$) [keV$^2$ (photons cm$^{-2}$ s$^{-1}$ keV$^{-1}$)]')
+
+if tf_eeufspec:
+  ax1.set_ylabel(r'Energy Flux ($E^2 F_E$) [$\mathrm{erg \cdot cm^2\cdot s^{-1}}$]')
+elif not tf_eeufspec:
+  ax1.set_ylabel(r'Counts s$^{-1}$ keV$^{-1}$')
+
 ax1.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
 ax1.grid(True, which="both", ls="--", alpha=0.3)
 
@@ -215,10 +235,23 @@ ax2.set_xlabel('Energy (keV)')
 ax2.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
 ax2.grid(True, which="both", ls=":", alpha=0.5)
 
+option_figure_name=[]
+
+if tf_eeufspec:
+  option_figure_name.append("_eeufspec")
+elif not tf_eeufspec:
+  option_figure_name.append("_plot")
+
 if tf_scorpion:
-  figure_path = os.path.join(OUTPUT_DIR, f"{ObsID}.png")
-else:
-  figure_path = os.path.join(OUTPUT_DIR, f"{ObsID}_noScorpion.png")
+  option_figure_name.append("_withScorpion")
+elif not tf_scorpion:
+  option_figure_name.append("_noScorpion")
+
+figure_name = str(ObsID)
+for option in option_figure_name:
+  figure_name += option
+
+figure_path = os.path.join(OUTPUT_DIR, figure_name)
 
 fig.savefig(figure_path)
 print(f"\nグラフを '{figure_path}' に保存しました。")
