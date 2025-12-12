@@ -2,7 +2,6 @@
   "name": "HEASoft Analysis Environment",
   // "image": "heasoft:v6.36",
   "runArgs": [
-    "--net=host",
     "--rm"
   ],
   "build": {
@@ -10,8 +9,7 @@
   },
   "containerEnv": {
     "CALDB": "/home/heasoft/CALDB",
-    "GEOMAG_PATH": "/home/heasoft/CALDB/data/gen/pcf/geomag",
-    "DISPLAY": "${localEnv:DISPLAY}"
+    "GEOMAG_PATH": "/home/heasoft/CALDB/data/gen/pcf/geomag"
   },
   "mounts": [
     // 1. CALDBのマウント
@@ -19,7 +17,7 @@
     
     // 2. 重たい観測データのマウント (Git管理外の安全地帯)
     // ここがコンテナ内の /home/heasoft/data になります
-    "source=/home/isseikurihara/HEASoft/GRB221009A/data_NICER,target=/home/heasoft/data,type=bind"
+    "source=/home/isseikurihara/HEASoft/data_container/GRB221009A,target=/home/heasoft/data,type=bind"
   ],
   "customizations": {
     "vscode": {

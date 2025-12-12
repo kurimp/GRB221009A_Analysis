@@ -2,8 +2,9 @@
 GRB221009A/
 CALDB/
 backup/
-data/
+data_container/
 terminal_logs/
+results/
 *.evt
 *.pha
 *.arf
