@@ -20,7 +20,7 @@ tf_scorpion = True
 #特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
 only_model = ["ZCutoffPL"]
 
-OUTPUT_DIR = f"results/{ObsID}"
+OUTPUT_DIR = f"results/spectrum/{ObsID}"
 
 # 比較したいモデルのリスト
 # "モデル名": { "expr": "XSPECの式", "params": { パラメータ番号: "初期値設定文字列" } }
