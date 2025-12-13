@@ -16,8 +16,8 @@ from lmfit.models import Model
 
 # --- 引数設定 ---
 parser = argparse.ArgumentParser(
-    description="Lightcurve processing script.",
-    formatter_class=argparse.RawTextHelpFormatter
+  description="Lightcurve processing script.",
+  formatter_class=argparse.RawTextHelpFormatter
 )
 
 # 必須のディレクトリ引数
@@ -39,20 +39,20 @@ dirname = args.data_directory
 # 時間の処理
 since_time = None
 if args.since:
-    try:
-        since_time = Time(args.since, format='isot', scale="tt")
-    except ValueError:
-        print(f"❌ Error: Invalid time format '{args.since}'. Please use ISO 8601.")
-        sys.exit(1)
+  try:
+    since_time = Time(args.since, format='isot', scale="tt")
+  except ValueError:
+    print(f"❌ Error: Invalid time format '{args.since}'. Please use ISO 8601.")
+    sys.exit(1)
 
 # ObsIDリストの処理（カンマ区切りの文字列をリストに変換）
 excluded_obsids = []
 if args.exclude:
-    # "101, 102, 103" -> ['101', '102', '103']
-    excluded_obsids = [obs_id.strip() for obs_id in args.exclude.split(',')]
+  # "101, 102, 103" -> ['101', '102', '103']
+  excluded_obsids = [obs_id.strip() for obs_id in args.exclude.split(',')]
 
 # --- 確認用出力 ---
-print(f"Directory: {dirname}")
+print(f"Data Directory: {dirname}")
 print(f"Exclusion Time: {since_time}")
 print(f"Excluded ObsIDs: {excluded_obsids}")
 
@@ -158,8 +158,6 @@ for datafilename in list_datafilename:
     
     time_abs_from_trigger = [int(td.to_value(u.s)) for td in time_abs_from_trigger]
 
-df_info.to_csv(os.path.join(dirname, "../", "ObsInfo.csv"))
-
 for _ in range(5):
   try:
     tf_ana = input(f"Enter 1 for analysis per ObsID, or 0 otherwise (default is 0).:")
@@ -204,12 +202,6 @@ else:
 
 zip_datas = sorted(zip_datas, key=lambda row: row[0])
 list_datas = list(zip(*zip_datas))
-
-with open(os.path.join(dirname, "../", f"data_{os.path.basename(dirname)}.csv"), 'w', newline='', encoding='utf-8') as f:
-  writer = csv.writer(f)
-  writer.writerow(['time', 'rate', 'error'])
-  for (a, b, c) in zip_datas:
-    writer.writerow((a, b, c))
 
 ax.errorbar(list_datas[0], list_datas[1], yerr=list_datas[2], fmt='x', capsize=0, label="data", alpha = 0.5)
 #ax.axvline(datetime(2022, 10, 9, 13, 16, 59), linestyle='--', color="black")
@@ -314,4 +306,22 @@ ax.minorticks_on()
 ax.legend()
 plt.tight_layout()
 
-plt.savefig(os.path.join("output_image", f"{datetime.now().strftime('%y%m%d%H%M%S')}_{os.path.basename(dirname)}_by_{title_disc}.png"), format="png", dpi=300)
+#各種データの保存
+data_path = str(dirname).split("collect/")[1]
+data_name = data_path.replace("/", "_")
+result_file_path = os.path.join("results", "lightcurve", data_path)
+os.makedirs(result_file_path, exist_ok=True)
+
+ObsInfo_path = os.path.join(result_file_path, f"ObsInfo.csv")
+result_data_path = os.path.join(result_file_path, f"data.csv")
+image_path = os.path.join(result_file_path, f"{title_disc}.png")
+
+df_info.to_csv(ObsInfo_path)
+
+with open(result_data_path, 'w', newline='', encoding='utf-8') as f:
+  writer = csv.writer(f)
+  writer.writerow(['time', 'rate', 'error'])
+  for (a, b, c) in zip_datas:
+    writer.writerow((a, b, c))
+
+plt.savefig(image_path, format="png", dpi=300)

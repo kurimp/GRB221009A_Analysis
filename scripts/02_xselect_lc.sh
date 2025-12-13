@@ -17,10 +17,10 @@ files=($(grep -vE "^\s*#|^\s*$" "${LIST_FILE}"))
 # 読み込んだ数の確認
 echo "  -> Found ${#files[@]} observations."
 
-# --- 設定パラメータ (ここを変えて何度でも実行可能) ---
+# --- 設定パラメータ ---
 BINSIZE=60
-PI_MIN=30    # 0.3 keV
-PI_MAX=1000  # 10.0 keV
+PI_MIN=1200
+PI_MAX=1500
 # --------------------
 
 echo "Settings: BinSize=${BINSIZE}s, PI=${PI_MIN}-${PI_MAX}"
