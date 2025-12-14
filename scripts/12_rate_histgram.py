@@ -21,7 +21,7 @@ if not (max-min) % width == 0:
 
 bin_count = int((max-min) // width + 1)
 
-bins = np.linspace(min, max, bin_count)
+bins = np.arange(min, max + width, width)
 
 freq = df['rate'].value_counts(bins=bins, sort=False)
 
@@ -52,7 +52,7 @@ ax.set_xlim(min-min*0.05, max+max*0.05)
 
 ax.set_title(f"Count Rate Histogram of GRB 221009A Light Curve")
 ax.set_xlabel('Count Rate (counts/s)')
-ax.set_ylabel('Frequency (count)')
+ax.set_ylabel('Frequency')
 
 ax.minorticks_on()
 plt.tight_layout()
