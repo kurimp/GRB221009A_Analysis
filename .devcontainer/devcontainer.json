@@ -24,7 +24,11 @@
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "eamodio.gitlens"  // Git管理を便利にする拡張機能(おすすめ)
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+        "oderwat.indent-rainbow",
+        "janisdd.vscode-edit-csv",
+        "mechatroner.rainbow-csv"
       ]
     }
   },
