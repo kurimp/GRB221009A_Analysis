@@ -18,7 +18,7 @@ files=($(grep -vE "^\s*#|^\s*$" "${LIST_FILE}"))
 echo "  -> Found ${#files[@]} observations."
 
 # --- 設定パラメータ ---
-BINSIZE=60
+BINSIZE=120
 PI_MIN=1200
 PI_MAX=1500
 # --------------------
@@ -47,7 +47,7 @@ do
   fi
 
   # 出力ファイル名
-  src_lc="${base_dir}/ni${obs_dir}_src_bin${BINSIZE}.lc"
+  src_lc="${base_dir}/ni${obs_dir}_src_bin${BINSIZE}_from${PI_MIN}to${PI_MAX}.lc"
   rm -f "${src_lc}"
 
   # xselect セッション設定
@@ -72,9 +72,9 @@ EOF
   rm -f "${session_name}.xsl"
 
   if [ -f "${src_lc}" ]; then
-     echo "  -> Success: Created ${src_lc}"
+    echo "  -> Success: Created ${src_lc}"
   else
-     echo "Warning: Lightcurve creation failed (likely empty data)."
+    echo "Warning: Lightcurve creation failed (likely empty data)."
   fi
 
   echo "---------------------------------------------------"

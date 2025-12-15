@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import os
+from scipy.stats import norm
+from scipy.optimize import curve_fit
 
 #===========config===========
 #使用するデータのパス
@@ -11,6 +13,8 @@ data_file_path = "results/lightcurve/bin60/from1200to1500/data.csv"
 width = 0.01
 min = 0
 max = 0.5
+
+#======================
 
 df = pd.read_csv(data_file_path)
 
@@ -46,6 +50,22 @@ print(dist)
 ax.bar(dist['class_value'], dist['frequancy'], width=width)
 ax.axvline(0.048, linestyle='--', color="black", alpha=0.5)
 
+#正規分布でのフィッティング
+def gaussian_func(x, A, mu, sigma):
+  return A * np.exp( - (x - mu)**2 / (2 * sigma**2))
+
+parameter_initial = np.array([400, 0.048, 0.018])
+
+popt, pcov = curve_fit(gaussian_func, dist['class_value'], dist['frequancy'], p0=parameter_initial, maxfev=100000)
+fit_norm_x = np.arange(min, max, width * 0.1)
+fit_norm_y = gaussian_func(fit_norm_x, popt[0], popt[1], popt[2])
+ax.plot(fit_norm_x, fit_norm_y, label="Fitted normal distribution", color="green")
+
+#正規分布の表示
+rep_norm_x = fit_norm_x
+rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)*20
+ax.plot(rep_norm_x, rep_norm_y, label="Reported normal distribution", color="red")
+
 ax.set_xscale('linear')
 #ax.set_yscale('log')
 ax.set_xlim(min-min*0.05, max+max*0.05)
@@ -55,6 +75,7 @@ ax.set_xlabel('Count Rate (counts/s)')
 ax.set_ylabel('Frequency')
 
 ax.minorticks_on()
+ax.legend()
 plt.tight_layout()
 
 #各種データの保存
