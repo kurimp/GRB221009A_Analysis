@@ -85,7 +85,7 @@ for datafilename in list_datafilename:
     time_system = header_rate.get('TIMESYS', 'TT').lower()
     
     #NICERミッション基準時刻の取得
-    mjd_ref = header_rate['MJDREFI'] + header_rate['MJDREFF']
+    mjd_ref = header_rate['MJDREFI']
     t_ref_absolute = Time(mjd_ref, format='mjd', scale=time_system.lower())
     
     #観測開始までの通算秒の取得と単位sの付与
