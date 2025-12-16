@@ -12,6 +12,7 @@ results/
 *.lc
 *.mkf
 *.xcm
+memo.txt
 
 # --- 2. 一時ファイル・ログを無視 ---
 *.log
