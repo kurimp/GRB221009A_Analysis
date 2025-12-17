@@ -121,6 +121,10 @@ for datafilename in list_datafilename:
       print(f"⚠️ Warning: No data found in {datafilename} (ObsID: {ObsID}). Skipping...")
       continue
     
+    if header_rate.get('EXPOSURE', '0.0') < 500:
+      print(f"Skipping...")
+      continue
+    
     #各ObsIDの観測開始時刻、観測終了時刻の表の作成
     _df_info = pd.DataFrame({'OBS-ID':header_primary.get('OBS_ID', 'N/A'), 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
     print(_df_info)

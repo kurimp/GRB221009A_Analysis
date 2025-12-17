@@ -59,13 +59,25 @@ parameter_initial = np.array([400, 0.048, 0.018])
 popt, pcov = curve_fit(gaussian_func, dist['class_value'], dist['frequancy'], p0=parameter_initial, maxfev=100000)
 fit_norm_x = np.arange(min, max, width * 0.1)
 fit_norm_y = gaussian_func(fit_norm_x, popt[0], popt[1], popt[2])
-ax.plot(fit_norm_x, fit_norm_y, label="Fitted normal distribution", color="green")
+
+re_parameter_initial = np.array([popt[0],popt[1], popt[2]])
+
+print(re_parameter_initial)
+
+re_dist = dist[(popt[1]-popt[2]*3 < dist['class_value'])&(dist['class_value'] < popt[1]+popt[2]*3)]
+
+print(re_dist)
+
+re_popt, re_pcov = curve_fit(gaussian_func, re_dist['class_value'], re_dist['frequancy'], p0=re_parameter_initial, maxfev=100000)
+re_fit_norm_x = np.arange(popt[1]-popt[2]*3, popt[1]+popt[2]*3, width * 0.1)
+re_fit_norm_y = gaussian_func(re_fit_norm_x, re_popt[0], re_popt[1], re_popt[2])
+
+ax.plot(re_fit_norm_x, re_fit_norm_y, label=f"Fitted normal distribution:$A={popt[0]:2f}$, $\mu={popt[1]:2f}$, $\sigma={popt[2]:2f}$", color="green")
 
 #正規分布の表示
-rep_norm_x = fit_norm_x
-rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)
+rep_norm_x = np.arange(0.048-0.018*3, 0.048+0.018*3, width * 0.1)
+rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)*0.7
 ax.plot(rep_norm_x, rep_norm_y, label="Reported normal distribution", color="red")
-
 ax.set_xscale('linear')
 #ax.set_yscale('log')
 ax.set_xlim(min-min*0.05, max+max*0.05)
