@@ -20,7 +20,7 @@ echo "  -> Found ${#files[@]} observations."
 for obs_dir in "${files[@]}"
 do
   
-  base_dir="data/${obs_dir}"
+  base_dir="data/obs/${obs_dir}"
   
   if [ ! -d "${base_dir}" ]; then
     continue

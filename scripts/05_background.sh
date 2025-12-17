@@ -21,7 +21,7 @@ files=($(grep -vE "^\s*#|^\s*$" "${LIST_FILE}"))
 # --- メインループ ---
 for obs_dir in "${files[@]}"
 do
-  base_dir="data/${obs_dir}"
+  base_dir="data/obs/${obs_dir}"
   
   if [ ! -d "${base_dir}" ]; then
     echo "Skip: ${base_dir} not found."

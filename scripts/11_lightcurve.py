@@ -68,7 +68,7 @@ list_error_ObsID = []
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
-df_info = pd.DataFrame(columns=['OBS-ID', 'DATE-OBS', 'DATE-END'])
+df_info = pd.DataFrame(columns=['OBS-ID', 'DATE-OBS', 'DATE-END', 'EXPOSURE'])
 
 for datafilename in list_datafilename:
   datapath = datafilename
@@ -122,8 +122,8 @@ for datafilename in list_datafilename:
       continue
     
     #各ObsIDの観測開始時刻、観測終了時刻の表の作成
-    _df_info = pd.DataFrame({'OBS-ID':header_primary.get('OBS_ID', 'N/A'), 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A')}, index=[0])
-    print()
+    _df_info = pd.DataFrame({'OBS-ID':header_primary.get('OBS_ID', 'N/A'), 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
+    print(_df_info)
     df_info = pd.concat([df_info, _df_info])
     
     #各点のデータの代入

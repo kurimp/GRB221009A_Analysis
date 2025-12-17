@@ -7,7 +7,7 @@ from scipy.optimize import curve_fit
 
 #===========config===========
 #使用するデータのパス
-data_file_path = "results/lightcurve/bin60/from1200to1500/data.csv"
+data_file_path = "results/lightcurve/seg/bin120/from1200to1500/data.csv"
 
 #表示するヒストグラムのbinの幅、及び表示範囲
 width = 0.01
@@ -63,7 +63,7 @@ ax.plot(fit_norm_x, fit_norm_y, label="Fitted normal distribution", color="green
 
 #正規分布の表示
 rep_norm_x = fit_norm_x
-rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)*20
+rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)
 ax.plot(rep_norm_x, rep_norm_y, label="Reported normal distribution", color="red")
 
 ax.set_xscale('linear')
