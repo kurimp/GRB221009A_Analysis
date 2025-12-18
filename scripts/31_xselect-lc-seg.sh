@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- ディレクトリリストの読み込み ---
-LIST_FILE="results/lightcurve/segments/segInfo.csv"
+LIST_FILE="results/lightcurve/segments/segInfo_fixed.csv"
 
 if [ ! -f "$LIST_FILE" ]; then
   echo "Error: List file '${LIST_FILE}' not found."
@@ -117,3 +117,5 @@ EOF
   echo "---------------------------------------------------"
   
 done < "$LIST_FILE"
+
+rm -f "xselect.log"
