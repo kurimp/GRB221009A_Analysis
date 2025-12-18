@@ -1,20 +1,7 @@
-import matplotlib.pyplot as plt
 from astropy.io import fits
-from astropy.time import Time
-from astropy.table import Table
-import numpy as np
-import astropy.units as u
 import os
 import csv
 import sys
-import glob
-import pandas as pd
-import math
-import argparse
-from datetime import datetime
-from lmfit.models import PowerLawModel
-from lmfit.models import Model
-import pprint
 
 obs_list_path: int = os.path.join("scripts", "obs_list.txt")
 

@@ -10,7 +10,6 @@ import glob
 import pandas as pd
 import math
 import argparse
-from datetime import datetime
 from lmfit.models import PowerLawModel
 from lmfit.models import Model
 
@@ -27,9 +26,9 @@ parser.add_argument("data_directory", type=str, help="The path to the directory 
 parser.add_argument("--since", type=str, default=None,
                     help="Optional timestamp to exclude data after this time.\nFormat: ISO 8601 (e.g., 2025-10-31T12:00:00.000)")
 
-# オプション：除外ObsIDリスト (例: --exclude 5410670113,5410670114,5410670115)
+# オプション：除外SegIDリスト (例: --exclude 5410670113-000,5410670114-005,5410670115-001)
 parser.add_argument("--exclude", type=str, default=None,
-                    help="Optional comma-separated list of ObsIDs to exclude.\nExample: 5410670113,5410670114,5410670115")
+                    help="Optional comma-separated list of segIDs to exclude.\nExample: 5410670113-000,5410670114-005,5410670115-001")
 
 args = parser.parse_args()
 
@@ -45,16 +44,16 @@ if args.since:
     print(f"❌ Error: Invalid time format '{args.since}'. Please use ISO 8601.")
     sys.exit(1)
 
-# ObsIDリストの処理（カンマ区切りの文字列をリストに変換）
-excluded_obsids = []
+# segIDリストの処理（カンマ区切りの文字列をリストに変換）
+excluded_segIDs = []
 if args.exclude:
   # "101, 102, 103" -> ['101', '102', '103']
-  excluded_obsids = [obs_id.strip() for obs_id in args.exclude.split(',')]
+  excluded_segIDs = [segID.strip() for segID in args.exclude.split(',')]
 
 # --- 確認用出力 ---
 print(f"Data Directory: {dirname}")
 print(f"Exclusion Time: {since_time}")
-print(f"Excluded ObsIDs: {excluded_obsids}")
+print(f"Excluded segIDs: {excluded_segIDs}")
 
 list_datafilename = sorted(glob.glob(os.path.join(dirname, "*.lc")))
 
@@ -62,13 +61,13 @@ list_time_elapsed_indiv = []
 list_rate_indiv = []
 list_error_indiv = []
 
-list_time_elapsed_ObsID = []
-list_rate_ObsID = []
-list_error_ObsID = []
+list_time_elapsed_segID = []
+list_rate_segID = []
+list_error_segID = []
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
-df_info = pd.DataFrame(columns=['OBS-ID', 'DATE-OBS', 'DATE-END', 'EXPOSURE'])
+df_info = pd.DataFrame(columns=['segID', 'DATE-OBS', 'DATE-END', 'EXPOSURE'])
 
 for datafilename in list_datafilename:
   datapath = datafilename
@@ -92,20 +91,20 @@ for datafilename in list_datafilename:
     t_start_met_sec = u.Quantity(header_rate.get('TSTART', 0.0), u.s)
     
     #観測開始時刻の計算
-    t_obs_start = t_ref_absolute + t_start_met_sec
+    t_seg_start = t_ref_absolute + t_start_met_sec
     
-    ObsID = header_primary.get('OBS_ID', 'N/A')
-    print(f"OBS-ID:{ObsID}")
-    print(f"観測開始時刻:{t_obs_start.isot}")
+    segID = os.path.basename(datapath).split("_src_")[0].replace("ni", "")
+    print(f"segID:{segID}")
+    print(f"観測開始時刻:{t_seg_start.isot}")
     
     #除外時刻の判定
-    if since_time is not None and t_obs_start >= since_time:
+    if since_time is not None and t_seg_start >= since_time:
       print(f"The Observation Time is after the specified 'since' time.")
       continue
     
-    #除外ObsIDの判定
-    if str(ObsID) in excluded_obsids:
-      print(f"The ObsID({ObsID}) is specified for exclusion.")
+    #除外segIDの判定
+    if str(segID) in excluded_segIDs:
+      print(f"The segID({segID}) is specified for exclusion.")
       continue
     
     if display_info:
@@ -118,15 +117,15 @@ for datafilename in list_datafilename:
     data = datafile['RATE'].data
     
     if data is None or len(data) == 0:
-      print(f"⚠️ Warning: No data found in {datafilename} (ObsID: {ObsID}). Skipping...")
+      print(f"⚠️ Warning: No data found in {datafilename} (segID: {segID}). Skipping...")
       continue
     
     #if header_rate.get('EXPOSURE', '0.0') < 500:
     #  print(f"Skipping...")
     #  continue
     
-    #各ObsIDの観測開始時刻、観測終了時刻の表の作成
-    _df_info = pd.DataFrame({'OBS-ID':header_primary.get('OBS_ID', 'N/A'), 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
+    #各segIDの観測開始時刻、観測終了時刻の表の作成
+    _df_info = pd.DataFrame({'segID':segID, 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
     df_info = pd.concat([df_info, _df_info])
     
     #各点のデータの代入
@@ -138,7 +137,7 @@ for datafilename in list_datafilename:
     time_elapsed_from_start = u.Quantity(time, u.s)
     
     #データの絶対時刻の計算
-    time_abs = t_obs_start + time_elapsed_from_start
+    time_abs = t_seg_start + time_elapsed_from_start
     
     time_abs_from_trigger = time_abs - Time(59861.55346065, format='mjd', scale=time_system.lower())
     
@@ -155,15 +154,15 @@ for datafilename in list_datafilename:
     list_rate_indiv.extend(rate)
     list_error_indiv.extend(error)
     
-    list_time_elapsed_ObsID.append(time_abs_from_trigger[0])
-    list_rate_ObsID.append(count_average)
-    list_error_ObsID.append(count_error)
+    list_time_elapsed_segID.append(time_abs_from_trigger[0])
+    list_rate_segID.append(count_average)
+    list_error_segID.append(count_error)
     
     time_abs_from_trigger = [int(td.to_value(u.s)) for td in time_abs_from_trigger]
 
 for _ in range(5):
   try:
-    tf_ana = input(f"Enter 1 for analysis per ObsID, or 0 otherwise (default is 0).:")
+    tf_ana = input(f"Enter 1 for analysis per segID, or 0 otherwise (default is 0).:")
     if tf_ana == "":
       tf_ana = False
     else:
@@ -176,10 +175,10 @@ else:
   print("Processing interrupted.")
 
 if tf_ana:
-  title_disc = "ObsID"
-  list_time_elapsed = list_time_elapsed_ObsID
-  list_rate = list_rate_ObsID
-  list_error = list_error_ObsID
+  title_disc = "segID"
+  list_time_elapsed = list_time_elapsed_segID
+  list_rate = list_rate_segID
+  list_error = list_error_segID
 elif not tf_ana:
   title_disc = "Indiv"
   list_time_elapsed = list_time_elapsed_indiv
@@ -315,11 +314,11 @@ data_name = data_path.replace("/", "_")
 result_file_path = os.path.join("results", "lightcurve", data_path)
 os.makedirs(result_file_path, exist_ok=True)
 
-ObsInfo_path = os.path.join(result_file_path, f"ObsInfo.csv")
+segInfo_path = os.path.join(result_file_path, f"segInfo.csv")
 result_data_path = os.path.join(result_file_path, f"data.csv")
 image_path = os.path.join(result_file_path, f"{title_disc}.png")
 
-df_info.to_csv(ObsInfo_path)
+df_info.to_csv(segInfo_path)
 
 with open(result_data_path, 'w', newline='', encoding='utf-8') as f:
   writer = csv.writer(f)

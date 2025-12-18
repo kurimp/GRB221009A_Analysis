@@ -69,14 +69,14 @@ re_dist = dist[(popt[1]-popt[2]*3 < dist['class_value'])&(dist['class_value'] < 
 print(re_dist)
 
 re_popt, re_pcov = curve_fit(gaussian_func, re_dist['class_value'], re_dist['frequancy'], p0=re_parameter_initial, maxfev=100000)
-re_fit_norm_x = np.arange(popt[1]-popt[2]*3, popt[1]+popt[2]*3, width * 0.1)
+re_fit_norm_x = np.arange(popt[1]-popt[2]*2, popt[1]+popt[2]*2, width * 0.1)
 re_fit_norm_y = gaussian_func(re_fit_norm_x, re_popt[0], re_popt[1], re_popt[2])
 
 ax.plot(re_fit_norm_x, re_fit_norm_y, label=f"Fitted normal distribution:$A={popt[0]:2f}$, $\mu={popt[1]:2f}$, $\sigma={popt[2]:2f}$", color="green")
 
 #正規分布の表示
-rep_norm_x = np.arange(0.048-0.018*3, 0.048+0.018*3, width * 0.1)
-rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)*0.7
+rep_norm_x = np.arange(0.048-0.018*2, 0.048+0.018*2, width * 0.1)
+rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)
 ax.plot(rep_norm_x, rep_norm_y, label="Reported normal distribution", color="red")
 ax.set_xscale('linear')
 #ax.set_yscale('log')
