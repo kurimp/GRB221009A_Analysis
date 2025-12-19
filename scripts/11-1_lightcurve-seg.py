@@ -148,7 +148,7 @@ for datafilename in list_datafilename:
     count_average = rate.mean()
     count_sum = count_average * duration
     
-    count_error = math.sqrt(count_sum) / duration
+    count_error = np.sqrt(np.sum(error**2)) / len(error)
     
     list_time_elapsed_indiv.extend(time_abs_from_trigger)
     list_rate_indiv.extend(rate)
@@ -223,10 +223,12 @@ def BrokenPowerLawModel(x, amplitude, t_break, alpha1, alpha2):
   # x < t_break の部分と x >= t_break の部分で式を変える
   # ※計算を安定させるため、t_breakで正規化して繋げることが多いです
   
+  x = np.array(x, dtype=float)
+  
   if t_break <= 0:
     return np.ones_like(x) * 1e30
   
-  model_output = np.zeros_like(x)
+  model_output = np.zeros_like(x, dtype=float)
   
   # ブレイク前
   mask1 = x < t_break
@@ -298,7 +300,7 @@ ax.set_ylim(None, 10000)
 #ax.set_xlim(datetime(2022, 10, 9, 0, 0, 0), datetime(2022, 10, 30, 0, 0, 0))
 
 #ax.grid(True, which='both', linestyle=':', alpha=0.6)
-ax.axhline(0.36666667, linestyle='--', color="black", alpha=0.5)
+ax.axhline(0.094, linestyle='--', color="black", alpha=0.5)
 ax.minorticks_on()
 
 #date_form = mdates.DateFormatter('%Y/%m/%d %H')
