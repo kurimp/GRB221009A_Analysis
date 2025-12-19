@@ -21,14 +21,25 @@
   ],
   "customizations": {
     "vscode": {
+      "settings":{
+        },
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "eamodio.gitlens",
         "mhutchie.git-graph",
         "oderwat.indent-rainbow",
         "janisdd.vscode-edit-csv",
-        "mechatroner.rainbow-csv"
+        "mechatroner.rainbow-csv",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "streetsidesoftware.code-spell-checker",
+        "oderwat.indent-rainbow",
+        "sirtori.indenticator",
+        "wayou.vscode-todo-highlight",
+        "mosapride.zenkaku",
+        "alefragnani.project-manager",
+        "pkief.material-icon-theme",
+        "tonybaloney.vscode-pets"
       ]
     }
   },

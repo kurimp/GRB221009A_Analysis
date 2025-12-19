@@ -4,5 +4,40 @@
 			"path": ".."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"cSpell.words": [
+			"astropy",
+			"autofmt",
+			"axhline",
+			"axvline",
+			"clevt",
+			"datapath",
+			"datas",
+			"errorbar",
+			"figsize",
+			"indiv",
+			"isot",
+			"Lightcurve",
+			"linestyle",
+			"lmfit",
+			"maxfev",
+			"mdates",
+			"minorticks",
+			"MJDREF",
+			"MJDREFI",
+			"obsids",
+			"pcov",
+			"popt",
+			"set_xlabel",
+			"TIMESYS",
+			"TSTART",
+			"xdate",
+			"xlim",
+			"xscale",
+			"yerr",
+			"ylabel",
+			"ylim",
+			"yscale"
+		]
+	}
 }

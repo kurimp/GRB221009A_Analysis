@@ -11,7 +11,7 @@ try:
     _l = [row for row in _reader]
     obsIDs: list = [str(x) for x in list(zip(*_l))[0] if x[0] != "#"]
 except FileNotFoundError:
-  print(f"error:File""{obs_list_path}"" not found.")
+  print("error:File""{obs_list_path}"" not found.")
   sys.exit(1)
 
 result_root_dir = os.path.join("results", "lightcurve", "segments")
@@ -19,7 +19,7 @@ result_time_dir = os.path.join(result_root_dir, "time")
 os.makedirs(result_time_dir, exist_ok=True)
 
 
-result_info_dir:str = os.path.join(result_root_dir, f"segInfo.csv")
+result_info_dir:str = os.path.join(result_root_dir, "segInfo.csv")
 with open(result_info_dir, "w", encoding='utf-8') as info:
   writer_info = csv.writer(info)
   writer_info.writerow(['obsID', 'segID', 'TimeDataFile', 'START', 'STOP'])

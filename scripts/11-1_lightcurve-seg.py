@@ -99,7 +99,7 @@ for datafilename in list_datafilename:
     
     #除外時刻の判定
     if since_time is not None and t_seg_start >= since_time:
-      print(f"The Observation Time is after the specified 'since' time.")
+      print("The Observation Time is after the specified 'since' time.")
       continue
     
     #除外segIDの判定
@@ -162,12 +162,12 @@ for datafilename in list_datafilename:
 
 for _ in range(5):
   try:
-    tf_ana = input(f"Enter 1 for analysis per segID, or 0 otherwise (default is 0).:")
+    tf_ana = input("Enter 1 for analysis per segID, or 0 otherwise (default is 0).:")
     if tf_ana == "":
       tf_ana = False
     else:
       tf_ana = bool(int(tf_ana))
-  except Exception as e:
+  except Exception:
     print("Please input '1' or '0'.")
   else:
     break
@@ -190,12 +190,12 @@ zip_datas = zip(list_time_elapsed_second, list_rate, list_error)
 
 for _ in range(5):
   try:
-    tf = input(f"Enter 1 to perform fitting, or 0 otherwise (default is 0).:")
+    tf = input("Enter 1 to perform fitting, or 0 otherwise (default is 0).:")
     if tf == "":
       tf = False
     else:
       tf = bool(int(tf))
-  except Exception as e:
+  except Exception:
     print("Please input '1' or '0'.")
   else:
     break
@@ -255,12 +255,12 @@ if tf:
   
   for _ in range(5):
     try:
-      tf_model = input(f"Enter 1 to use Broken Power Law Model, or 0 Power Law Model (default is 0).:")
+      tf_model = input("Enter 1 to use Broken Power Law Model, or 0 Power Law Model (default is 0).:")
       if tf_model == "":
         tf_model = False
       else:
         tf_model = bool(int(tf_model))
-    except Exception as e:
+    except Exception:
       print("Please input '1' or '0'.")
     else:
       break
@@ -314,8 +314,8 @@ data_name = data_path.replace("/", "_")
 result_file_path = os.path.join("results", "lightcurve", data_path)
 os.makedirs(result_file_path, exist_ok=True)
 
-segInfo_path = os.path.join(result_file_path, f"segInfo.csv")
-result_data_path = os.path.join(result_file_path, f"data.csv")
+segInfo_path = os.path.join(result_file_path, "segInfo.csv")
+result_data_path = os.path.join(result_file_path, "data.csv")
 image_path = os.path.join(result_file_path, f"{title_disc}.png")
 
 df_info.to_csv(segInfo_path)

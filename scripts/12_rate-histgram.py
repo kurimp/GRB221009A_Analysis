@@ -37,7 +37,7 @@ rel_cum_freq = rel_freq.cumsum()
 dist = pd.DataFrame(
   {
     "class_value": class_value,
-    "frequancy": freq,
+    "frequency": freq,
     "rel_freq": rel_freq,
     "cum_freq": cum_freq,
     "rel_cum_freq": rel_cum_freq,
@@ -47,7 +47,7 @@ dist = pd.DataFrame(
 
 print(dist)
 
-ax.bar(dist['class_value'], dist['frequancy'], width=width)
+ax.bar(dist['class_value'], dist['frequency'], width=width)
 ax.axvline(0.048, linestyle='--', color="black", alpha=0.5)
 
 #正規分布でのフィッティング
@@ -56,7 +56,7 @@ def gaussian_func(x, A, mu, sigma):
 
 parameter_initial = np.array([400, 0.048, 0.018])
 
-popt, pcov = curve_fit(gaussian_func, dist['class_value'], dist['frequancy'], p0=parameter_initial, maxfev=100000)
+popt, pcov = curve_fit(gaussian_func, dist['class_value'], dist['frequency'], p0=parameter_initial, maxfev=100000)
 fit_norm_x = np.arange(min, max, width * 0.1)
 fit_norm_y = gaussian_func(fit_norm_x, popt[0], popt[1], popt[2])
 
@@ -68,7 +68,7 @@ re_dist = dist[(popt[1]-popt[2]*3 < dist['class_value'])&(dist['class_value'] < 
 
 print(re_dist)
 
-re_popt, re_pcov = curve_fit(gaussian_func, re_dist['class_value'], re_dist['frequancy'], p0=re_parameter_initial, maxfev=100000)
+re_popt, re_pcov = curve_fit(gaussian_func, re_dist['class_value'], re_dist['frequency'], p0=re_parameter_initial, maxfev=100000)
 re_fit_norm_x = np.arange(popt[1]-popt[2]*2, popt[1]+popt[2]*2, width * 0.1)
 re_fit_norm_y = gaussian_func(re_fit_norm_x, re_popt[0], re_popt[1], re_popt[2])
 
@@ -82,7 +82,7 @@ ax.set_xscale('linear')
 #ax.set_yscale('log')
 ax.set_xlim(min-min*0.05, max+max*0.05)
 
-ax.set_title(f"Count Rate Histogram of GRB 221009A Light Curve")
+ax.set_title("Count Rate Histogram of GRB 221009A Light Curve")
 ax.set_xlabel('Count Rate (counts/s)')
 ax.set_ylabel('Frequency')
 
@@ -93,9 +93,9 @@ plt.tight_layout()
 #各種データの保存
 result_folder_path = os.path.dirname(data_file_path)
 
-FrequencyDistribution_path = os.path.join(result_folder_path, f"FrequencyDistribution.csv")
-result_data_path = os.path.join(result_folder_path, f"data.csv")
-CountRateHist_path = os.path.join(result_folder_path, f"CountRateHist.png")
+FrequencyDistribution_path = os.path.join(result_folder_path, "FrequencyDistribution.csv")
+result_data_path = os.path.join(result_folder_path, "data.csv")
+CountRateHist_path = os.path.join(result_folder_path, "CountRateHist.png")
 
 dist.to_csv(FrequencyDistribution_path)
 plt.savefig(CountRateHist_path, format="png", dpi=300)
