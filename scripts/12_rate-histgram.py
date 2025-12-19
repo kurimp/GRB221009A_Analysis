@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import os
-from scipy.stats import norm
 from scipy.optimize import curve_fit
 
 #===========config===========
@@ -47,16 +46,16 @@ dist = pd.DataFrame(
 
 print(dist)
 
+#解析結果の表示
 ax.bar(dist['class_value'], dist['frequency'], width=width)
-ax.axvline(0.048, linestyle='--', color="black", alpha=0.5)
 
 #正規分布でのフィッティング
 def gaussian_func(x, A, mu, sigma):
   return A * np.exp( - (x - mu)**2 / (2 * sigma**2))
 
 parameter_initial = np.array([400, 0.048, 0.018])
-
-popt, pcov = curve_fit(gaussian_func, dist['class_value'], dist['frequency'], p0=parameter_initial, maxfev=100000)
+sigma_errors = np.sqrt(dist['frequency'])
+popt, pcov = curve_fit(gaussian_func, dist['class_value'], dist['frequency'], p0=parameter_initial, sigma=sigma_errors, absolute_sigma=True, maxfev=100000)
 fit_norm_x = np.arange(min, max, width * 0.1)
 fit_norm_y = gaussian_func(fit_norm_x, popt[0], popt[1], popt[2])
 
@@ -68,16 +67,18 @@ re_dist = dist[(popt[1]-popt[2]*3 < dist['class_value'])&(dist['class_value'] < 
 
 print(re_dist)
 
-re_popt, re_pcov = curve_fit(gaussian_func, re_dist['class_value'], re_dist['frequency'], p0=re_parameter_initial, maxfev=100000)
+re_sigma_errors = np.sqrt(re_dist['frequency'])
+re_popt, re_pcov = curve_fit(gaussian_func, re_dist['class_value'], re_dist['frequency'], p0=re_parameter_initial, sigma=re_sigma_errors, absolute_sigma=True, maxfev=100000)
 re_fit_norm_x = np.arange(popt[1]-popt[2]*2, popt[1]+popt[2]*2, width * 0.1)
 re_fit_norm_y = gaussian_func(re_fit_norm_x, re_popt[0], re_popt[1], re_popt[2])
 
-ax.plot(re_fit_norm_x, re_fit_norm_y, label=f"Fitted normal distribution:$A={popt[0]:2f}$, $\mu={popt[1]:2f}$, $\sigma={popt[2]:2f}$", color="green")
+ax.plot(re_fit_norm_x, re_fit_norm_y, label=f"Fitted normal distribution:$A={re_popt[0]:2f}$, $\mu={re_popt[1]:2f}$, $\sigma={re_popt[2]:2f}$", color="green")
 
 #正規分布の表示
 rep_norm_x = np.arange(0.048-0.018*2, 0.048+0.018*2, width * 0.1)
-rep_norm_y = norm.pdf(rep_norm_x, loc=0.048, scale=0.018)
-ax.plot(rep_norm_x, rep_norm_y, label="Reported normal distribution", color="red")
+rep_norm_y = gaussian_func(rep_norm_x, re_popt[0], 0.048, 0.018)
+ax.plot(rep_norm_x, rep_norm_y, label=f"Reported normal distribution:$A={re_popt[0]:2f}$, $\mu=0.048$, $\sigma=0.018$", color="red")
+ax.axvline(0.048, linestyle='--', color="black", alpha=0.5)
 ax.set_xscale('linear')
 #ax.set_yscale('log')
 ax.set_xlim(min-min*0.05, max+max*0.05)

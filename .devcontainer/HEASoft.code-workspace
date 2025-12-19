@@ -38,6 +38,10 @@
 			"ylabel",
 			"ylim",
 			"yscale"
-		]
+		],
+		"vscode-pets.petSize": "small",
+		"vscode-pets.theme": "winter",
+		"python.analysis.inlayHints.callArgumentNames": "all",
+		"python.analysis.inlayHints.functionReturnTypes": true
 	}
 }
