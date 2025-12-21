@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from astropy.time import Time
@@ -8,7 +10,6 @@ import csv
 import sys
 import glob
 import pandas as pd
-import math
 import argparse
 from lmfit.models import PowerLawModel
 from lmfit.models import Model
@@ -60,10 +61,12 @@ list_datafilename = sorted(glob.glob(os.path.join(dirname, "*.lc")))
 list_time_elapsed_indiv = []
 list_rate_indiv = []
 list_error_indiv = []
+list_segID_indiv = []
 
 list_time_elapsed_segID = []
 list_rate_segID = []
 list_error_segID = []
+list_segID_segID = []
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -84,14 +87,34 @@ for datafilename in list_datafilename:
     time_system = header_rate.get('TIMESYS', 'TT').lower()
     
     #NICERミッション基準時刻の取得
-    mjd_ref = header_rate['MJDREFI']
+    mjd_ref = header_rate['MJDREFI'] + header_rate['MJDREFF']
     t_ref_absolute = Time(mjd_ref, format='mjd', scale=time_system.lower())
     
-    #観測開始までの通算秒の取得と単位sの付与
-    t_start_met_sec = u.Quantity(header_rate.get('TSTART', 0.0), u.s)
+    data = datafile['RATE'].data
+    time = data['TIME']
+    rate = data['RATE']
+    error = data['ERROR']
     
-    #観測開始時刻の計算
-    t_seg_start = t_ref_absolute + t_start_met_sec
+    time_zero_val = header_rate.get('TIMEZERO', '0.0')
+    t_start_val = header_rate.get('TSTART', '0.0')
+    
+    #base_met:そのsegIDの観測開始時点のMET
+    if abs(time_zero_val) > 1e8:
+      base_met = time_zero_val
+    elif time[0] > 1e8:
+      base_met = time_zero_val
+    else:
+      base_met = t_start_val + time_zero_val
+    
+    #それぞれを時"間"に変換
+    base_met_delta = u.Quantity(base_met, u.s)
+    time_col_delta = u.Quantity(time, u.s)
+    
+    #SegID開始時刻=NICER基準時刻+SegID開始までの時間
+    t_seg_start = t_ref_absolute + base_met_delta
+    
+    #データ点の絶対時刻=SegID開始時刻+観測開始からデータ点までの時間
+    time_abs = t_seg_start + time_col_delta
     
     segID = os.path.basename(datapath).split("_src_")[0].replace("ni", "")
     print(f"segID:{segID}")
@@ -114,7 +137,7 @@ for datafilename in list_datafilename:
       print(f"DATE-END:{header_primary.get('DATE-END', 'N/A')}")
       print(f"EXPOSURE:{header_rate.get('EXPOSURE', '0.0')}")
       print(f"TIMESYS:{time_system}")
-    data = datafile['RATE'].data
+      print(f"TIMEZERO:{header_rate.get('TIMEZERO', '0.0')}")
     
     if data is None or len(data) == 0:
       print(f"⚠️ Warning: No data found in {datafilename} (segID: {segID}). Skipping...")
@@ -128,43 +151,36 @@ for datafilename in list_datafilename:
     _df_info = pd.DataFrame({'segID':segID, 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
     df_info = pd.concat([df_info, _df_info])
     
-    #各点のデータの代入
-    time = data['TIME']
-    rate = data['RATE']
-    error = data['ERROR']
+    #トリガーからの経過時間=データ点の絶対時刻-トリガー時刻
+    trigger_MJD = 59861.55347211
+    time_abs_from_trigger = (time_abs - Time(trigger_MJD, format='mjd', scale='utc')).to_value(u.s)
     
-    #観測開始時刻からの経過時間への単位sの付与
-    time_elapsed_from_start = u.Quantity(time, u.s)
+    #bin幅の取得
+    bin_width = header_rate.get('TIMEDEL', 0.0)
     
-    #データの絶対時刻の計算
-    time_abs = t_seg_start + time_elapsed_from_start
-    
-    time_abs_from_trigger = time_abs - Time(59861.55346065, format='mjd', scale=time_system.lower())
-    
-    #datetimeオブジェクトに変換
-    time_abs_datetime = time_abs.datetime
-    
-    duration = ((time_abs_from_trigger[-1]+u.Quantity(60, u.s))-time_abs_from_trigger[0]).to_value(u.s)
+    duration = ((time_abs_from_trigger[-1]+bin_width)-time_abs_from_trigger[0])
     count_average = rate.mean()
     count_sum = count_average * duration
     
     count_error = np.sqrt(np.sum(error**2)) / len(error)
     
+    segID_list = [segID for _ in range(len(time_abs_from_trigger))]
+    
     list_time_elapsed_indiv.extend(time_abs_from_trigger)
     list_rate_indiv.extend(rate)
     list_error_indiv.extend(error)
+    list_segID_indiv.extend(segID_list)
     
     list_time_elapsed_segID.append(time_abs_from_trigger[0])
     list_rate_segID.append(count_average)
     list_error_segID.append(count_error)
-    
-    time_abs_from_trigger = [int(td.to_value(u.s)) for td in time_abs_from_trigger]
+    list_segID_segID.append(segID)
 
 for _ in range(5):
   try:
-    tf_ana = input("Enter 1 for analysis per segID, or 0 otherwise (default is 0).:")
+    tf_ana = input("Enter 1 for analysis per segID, or 0 otherwise (default is 1).:")
     if tf_ana == "":
-      tf_ana = False
+      tf_ana = True
     else:
       tf_ana = bool(int(tf_ana))
   except Exception:
@@ -179,14 +195,16 @@ if tf_ana:
   list_time_elapsed = list_time_elapsed_segID
   list_rate = list_rate_segID
   list_error = list_error_segID
+  list_segID = list_segID_segID
 elif not tf_ana:
   title_disc = "Indiv"
   list_time_elapsed = list_time_elapsed_indiv
   list_rate = list_rate_indiv
   list_error = list_error_indiv
+  list_segID = list_segID_indiv
 
-list_time_elapsed_second = [int(td.to_value(u.s)) for td in list_time_elapsed]
-zip_datas = zip(list_time_elapsed_second, list_rate, list_error)
+list_time_elapsed_second = [td for td in list_time_elapsed]
+zip_datas = zip(list_segID, list_time_elapsed_second, list_rate, list_error)
 
 for _ in range(5):
   try:
@@ -202,15 +220,15 @@ for _ in range(5):
 else:
   print("Processing interrupted.")
 
-zip_datas = sorted(zip_datas, key=lambda row: row[0])
+zip_datas = sorted(zip_datas, key=lambda row: row[1])
 list_datas = list(zip(*zip_datas))
 
-ax.errorbar(list_datas[0], list_datas[1], yerr=list_datas[2], fmt='x', capsize=0, label="data", alpha = 0.5)
-#ax.axvline(datetime(2022, 10, 9, 13, 16, 59), linestyle='--', color="black")
+segID_data = np.array(list_datas[0])
+x_data = np.array(list_datas[1])
+y_data = np.array(list_datas[2])
+error_data = np.array(list_datas[3])
 
-x_data = np.array(list_datas[0])
-y_data = np.array(list_datas[1])
-error_data = np.array(list_datas[2])
+ax.errorbar(x_data, y_data, error_data, fmt='x', capsize=0, label="data", alpha = 0.5)
 
 def BrokenPowerLawModel(x, amplitude, t_break, alpha1, alpha2):
   """
@@ -249,6 +267,7 @@ if tf:
     print("Error: No valid data points for fitting (all errors are 0 or x <= 0).")
     sys.exit(1)
   
+  segID_safe = segID_data[valid_mask]
   x_safe = x_data[valid_mask]
   y_safe = y_data[valid_mask]
   error_safe = error_data[valid_mask]
@@ -323,9 +342,9 @@ image_path = os.path.join(result_file_path, f"{title_disc}.png")
 df_info.to_csv(segInfo_path)
 
 with open(result_data_path, 'w', newline='', encoding='utf-8') as f:
-  writer = csv.writer(f)
-  writer.writerow(['time', 'rate', 'error'])
-  for (a, b, c) in zip_datas:
-    writer.writerow((a, b, c))
+  writer = csv.writer( f)
+  writer.writerow(['segID', 'time', 'rate', 'error'])
+  for (a, b, c, d) in zip_datas:
+    writer.writerow((a, b, c, d))
 
 plt.savefig(image_path, format="png", dpi=300)

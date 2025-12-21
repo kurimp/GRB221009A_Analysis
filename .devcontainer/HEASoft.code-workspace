@@ -8,12 +8,17 @@
 		"cSpell.words": [
 			"astropy",
 			"autofmt",
+			"auxil",
 			"axhline",
 			"axvline",
+			"BINSIZE",
 			"clevt",
+			"clfile",
+			"clfilename",
 			"datapath",
 			"datas",
 			"errorbar",
+			"evtdir",
 			"figsize",
 			"indiv",
 			"isot",
@@ -24,16 +29,24 @@
 			"mdates",
 			"minorticks",
 			"MJDREF",
+			"MJDREFF",
 			"MJDREFI",
+			"nicerl2",
+			"obsfiles",
 			"obsids",
+			"obsORseg",
 			"pcov",
 			"popt",
+			"segdir",
 			"set_xlabel",
+			"TIMEDEL",
 			"TIMESYS",
+			"TIMEZERO",
 			"TSTART",
 			"xdate",
 			"xlim",
 			"xscale",
+			"xselect",
 			"yerr",
 			"ylabel",
 			"ylim",
@@ -42,6 +55,9 @@
 		"vscode-pets.petSize": "small",
 		"vscode-pets.theme": "winter",
 		"python.analysis.inlayHints.callArgumentNames": "all",
-		"python.analysis.inlayHints.functionReturnTypes": true
+		"python.analysis.inlayHints.functionReturnTypes": true,
+		"cSpell.ignoreWords": [
+			"nicerl2"
+		]
 	}
 }
