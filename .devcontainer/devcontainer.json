@@ -8,6 +8,7 @@
     "dockerfile": "Dockerfile"
   },
   "containerEnv": {
+    "PYTHONPATH": "${containerWorkspaceFolder}",
     "CALDB": "/home/heasoft/CALDB",
     "GEOMAG_PATH": "/home/heasoft/CALDB/data/gen/pcf/geomag"
   },
@@ -44,5 +45,5 @@
     }
   },
   // 起動時の初期設定
-  "postCreateCommand": "echo 'export CALDB=/home/heasoft/CALDB' >> ~/.bashrc && echo 'export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag' >> ~/.bashrc && . .venv/bin/activate"
+  "postCreateCommand": "bash -c \"ln -sf ${containerWorkspaceFolder}/.devcontainer/.alias ~/.alias && (grep -qF '. ~/.alias' ~/.bashrc || echo '[ -f ~/.alias ] && . ~/.alias' >> ~/.bashrc) && echo 'export CALDB=/home/heasoft/CALDB' >> ~/.bashrc && echo 'export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag' >> ~/.bashrc\""
 }

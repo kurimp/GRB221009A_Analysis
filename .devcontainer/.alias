@@ -1,0 +1,2 @@
+alias reload="source ~/.alias"
+alias activate="bash .venv/bin/activate"
