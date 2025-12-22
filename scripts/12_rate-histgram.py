@@ -1,12 +1,15 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import os
 from scipy.optimize import curve_fit
+from scripts.utils.read_config import cfg
 
 #===========config===========
 #使用するデータのパス
-data_file_path = "results/lightcurve/seg/bin120/from1200to1500/data.csv"
+data_file_path = cfg['lightcurve']['path']['data-for-hist']
 
 #表示するヒストグラムのbinの幅、及び表示範囲
 width = 0.01

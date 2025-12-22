@@ -1,7 +1,9 @@
 #!/bin/bash
 
 # --- ディレクトリリストの読み込み ---
-LIST_FILE="results/lightcurve/segments/segInfo_fixed.csv"
+LIST_DIR=$(yq -r '.segment.path.result_root' scripts/config.yaml)
+LIST_NAME=$(yq -r '.segment.path.obs_list_name' scripts/config.yaml)
+LIST_FILE="$LIST_DIR/$LIST_NAME"
 
 if [ ! -f "$LIST_FILE" ]; then
   echo "Error: List file '${LIST_FILE}' not found."
@@ -46,14 +48,13 @@ do
   
   clfile="${seg_dir}/xti/event_cl/ni${obsID}_0mpu7_cl.evt"
   evtdir="${seg_dir}/xti/event_cl"
-
-  # nicerl2が完了しているか確認
+  
   if [ ! -f "${clfile}" ]; then
     echo "Warning: Cleaned event file not found for ${obsID}."
     echo "         Please run 01_run_nicerl2.sh first."
     continue
   fi
-
+  
   # 出力ファイル名
   src_lc="${seg_dir}/ni${segID}_src_bin${BINSIZE}_from${PI_MIN}to${PI_MAX}.lc"
   src_evt="${seg_dir}/xti/event_cl/ni${segID}_0mpu7_cl.evt"

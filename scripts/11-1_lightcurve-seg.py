@@ -10,51 +10,18 @@ import csv
 import sys
 import glob
 import pandas as pd
-import argparse
 from lmfit.models import PowerLawModel
 from lmfit.models import Model
+from scripts.utils.read_config import cfg
 
-# --- 引数設定 ---
-parser = argparse.ArgumentParser(
-  description="Lightcurve processing script.",
-  formatter_class=argparse.RawTextHelpFormatter
-)
-
-# 必須のディレクトリ引数
-parser.add_argument("data_directory", type=str, help="The path to the directory containing the observational data files.")
-
-# オプション：時間除外 (例: --time 2025-01-01...)
-parser.add_argument("--since", type=str, default=None,
-                    help="Optional timestamp to exclude data after this time.\nFormat: ISO 8601 (e.g., 2025-10-31T12:00:00.000)")
-
-# オプション：除外SegIDリスト (例: --exclude 5410670113-000,5410670114-005,5410670115-001)
-parser.add_argument("--exclude", type=str, default=None,
-                    help="Optional comma-separated list of segIDs to exclude.\nExample: 5410670113-000,5410670114-005,5410670115-001")
-
-args = parser.parse_args()
-
-# --- 値の取得と処理 ---
-dirname = args.data_directory
-
-# 時間の処理
-since_time = None
-if args.since:
-  try:
-    since_time = Time(args.since, format='isot', scale="tt")
-  except ValueError:
-    print(f"❌ Error: Invalid time format '{args.since}'. Please use ISO 8601.")
-    sys.exit(1)
-
-# segIDリストの処理（カンマ区切りの文字列をリストに変換）
-excluded_segIDs = []
-if args.exclude:
-  # "101, 102, 103" -> ['101', '102', '103']
-  excluded_segIDs = [segID.strip() for segID in args.exclude.split(',')]
+dirname = cfg['lightcurve']['path']['collect-datas']
+xmin = cfg['lightcurve']['parameters']['lc_xmin']
+xmax = cfg['lightcurve']['parameters']['lc_xmax']
+ymin = cfg['lightcurve']['parameters']['lc_ymin']
+ymax = cfg['lightcurve']['parameters']['lc_ymax']
 
 # --- 確認用出力 ---
 print(f"Data Directory: {dirname}")
-print(f"Exclusion Time: {since_time}")
-print(f"Excluded segIDs: {excluded_segIDs}")
 
 list_datafilename = sorted(glob.glob(os.path.join(dirname, "*.lc")))
 
@@ -120,16 +87,6 @@ for datafilename in list_datafilename:
     print(f"segID:{segID}")
     print(f"観測開始時刻:{t_seg_start.isot}")
     
-    #除外時刻の判定
-    if since_time is not None and t_seg_start >= since_time:
-      print("The Observation Time is after the specified 'since' time.")
-      continue
-    
-    #除外segIDの判定
-    if str(segID) in excluded_segIDs:
-      print(f"The segID({segID}) is specified for exclusion.")
-      continue
-    
     if display_info:
       print(f"MJDREF:{mjd_ref}")
       print(f"OBJECT:{header_primary.get('OBJECT', 'N/A')}")
@@ -143,16 +100,12 @@ for datafilename in list_datafilename:
       print(f"⚠️ Warning: No data found in {datafilename} (segID: {segID}). Skipping...")
       continue
     
-    #if header_rate.get('EXPOSURE', '0.0') < 500:
-    #  print(f"Skipping...")
-    #  continue
-    
     #各segIDの観測開始時刻、観測終了時刻の表の作成
     _df_info = pd.DataFrame({'segID':segID, 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
     df_info = pd.concat([df_info, _df_info])
     
     #トリガーからの経過時間=データ点の絶対時刻-トリガー時刻
-    trigger_MJD = 59861.55347211
+    trigger_MJD = cfg['general']['parameters']['trigger_time']
     time_abs_from_trigger = (time_abs - Time(trigger_MJD, format='mjd', scale='utc')).to_value(u.s)
     
     #bin幅の取得
@@ -314,8 +267,8 @@ ax.set_xlabel('Elapsed Time from the Fermi-GBM trigger(2022 October 9 at 13:16:5
 ax.set_ylabel('Rate (counts/s)')
 ax.set_xscale('log')
 ax.set_yscale('log')
-#ax.set_xlim(1, None)
-ax.set_ylim(None, 10000)
+ax.set_xlim(xmin, xmax)
+ax.set_ylim(ymin, ymax)
 #ax.set_xlim(datetime(2022, 10, 9, 0, 0, 0), datetime(2022, 10, 30, 0, 0, 0))
 
 #ax.grid(True, which='both', linestyle=':', alpha=0.6)
