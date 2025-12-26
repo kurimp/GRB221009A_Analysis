@@ -1,49 +1,47 @@
 #!/bin/bash
 
-# --- ディレクトリリストの読み込み ---
-LIST_FILE="scripts/obs_list.txt"
+CONFIG="scripts/config.yaml"
+
+LIST_FILE=$(yq -r '.spectrum.path.seg_list' $CONFIG)
+data_file_base=$(yq -r '.spectrum.path.base_dir' $CONFIG)
 
 if [ ! -f "$LIST_FILE" ]; then
   echo "Error: List file '${LIST_FILE}' not found."
   exit 1
 fi
 
-echo "Reading ObsIDs from ${LIST_FILE}..."
+echo "Reading segIDs from ${LIST_FILE}..."
 
-# コメント行(#)と空行を除外して配列に読み込む
-# grep -vE "^\s*#|^\s*$" : #で始まる行と空行を除外
-files=($(grep -vE "^\s*#|^\s*$" "${LIST_FILE}"))
+mapfile -t files < <(grep -vE "^\s*#|^\s*$" "${LIST_FILE}")
 
-# 読み込んだ数の確認
 echo "  -> Found ${#files[@]} observations."
 
-for obs_dir in "${files[@]}"
+for segID in "${files[@]}"
 do
-  
-  base_dir="data/obs/${obs_dir}"
-  
+
+  base_dir="${data_file_base}/${segID}"
+
   if [ ! -d "${base_dir}" ]; then
     continue
   fi
 
-  echo "=== Extracting spectrum: ${obs_dir} ==="
-  
-  clfile="${base_dir}/xti/event_cl/ni${obs_dir}_0mpu7_cl.evt"
+  echo "=== Extracting spectrum: ${segID} ==="
+
+  clfile="${base_dir}/xti/event_cl/ni${segID}_0mpu7_cl.evt"
   evtdir="${base_dir}/xti/event_cl"
 
-  # nicerl2が完了しているか確認
   if [ ! -f "${clfile}" ]; then
-    echo "Warning: Cleaned event file not found for ${obs_dir}."
+    echo "Warning: Cleaned event file not found for ${segID}."
     echo "         Please run 01_nicerl2.sh first."
     continue
   fi
 
   # 出力ファイル名
-  src_spec="${base_dir}/ni${obs_dir}_src.pha"
+  src_spec="${base_dir}/ni${segID}_src.pha"
   rm -f "${src_spec}"
 
   # xselect セッション設定
-  session_name="session_spec_${obs_dir}"
+  session_name="session_spec_${segID}"
   rm -f "${session_name}.xsl"
   clfilename=$(basename "${clfile}")
 
@@ -62,9 +60,9 @@ EOF
   rm -f "${session_name}.xsl"
 
   if [ -f "${src_spec}" ]; then
-     echo "  -> Success: Created ${src_spec}"
+    echo "  -> Success: Created ${src_spec}"
   else
-     echo "Warning: Spectrum creation failed (likely empty data)."
+    echo "Warning: Spectrum creation failed (likely empty data)."
   fi
 
   echo "---------------------------------------------------"

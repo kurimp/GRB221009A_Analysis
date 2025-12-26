@@ -25,16 +25,15 @@ mkdir -p "./data/collect/${FILENAME}"
 
 seg_list=$(awk -F',' 'NR>1 {print $2}' "$obs_list_path" | tr -d '\r')
 
-count=0
 for segID in $seg_list; do
   # IDが空でないか確認
   [ -z "$segID" ] && continue
-  
+
   echo "🔍 Searching for segID: $segID"
-  
+
   find -L "./data/${is_obs_seg}" -maxdepth 2 -type f \
     -name "ni${segID}_src_bin${BIN}_from${PI_MIN}to${PI_MAX}.lc"
-  
+
   find -L "./data/${is_obs_seg}" -maxdepth 2 -type f \
     -name "ni${segID}_src_bin${BIN}_from${PI_MIN}to${PI_MAX}.lc" \
     -exec cp -f {} "./data/collect/${FILENAME}" \;
