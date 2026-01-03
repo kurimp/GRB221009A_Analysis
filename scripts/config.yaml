@@ -25,7 +25,11 @@ lightcurve:
     data-for-hist: results/lightcurve/seg02/bin120/from1200to1500/data.csv
 spectrum:
   parameters:
-    
+    grp_time: 20
+    systematic : 0.01
   path:
     seg_list: scripts/seg_list.txt
     base_dir: data/seg
+    merge_output: results/spectrum/group_subset
+    merge_list: scripts/group04_list.txt
+    merge_name: group04
