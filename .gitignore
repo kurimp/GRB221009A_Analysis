@@ -5,6 +5,7 @@ backup/
 data_container/
 terminal_logs/
 results/
+box/
 *.evt
 *.pha
 *.arf

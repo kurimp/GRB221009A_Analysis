@@ -27,9 +27,10 @@ spectrum:
   parameters:
     grp_time: 20
     systematic : 0.01
+    ignoreRange : "**-1.0 8.0-**"
   path:
     seg_list: scripts/seg_list.txt
     base_dir: data/seg
     merge_output: results/spectrum/group_subset
-    merge_list: scripts/group04_list.txt
-    merge_name: group04
+    merge_list: scripts/test.txt
+    merge_name: test

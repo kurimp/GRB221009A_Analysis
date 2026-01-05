@@ -19,9 +19,10 @@ file_path = os.path.join(cfg['spectrum']['path']['merge_output'], file_name)
 tf_scorpion = False
 
 systematic = cfg['spectrum']['parameters']['systematic']
+ignoreRange = cfg['spectrum']['parameters']['ignoreRange']
 
 #特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
-only_model = ["ZCutoffPL"]
+only_model = ["ZPL2"]
 
 OUTPUT_DIR = f"results/spectrum/{file_name}"
 
@@ -62,6 +63,39 @@ MODELS = {
       3: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma
       4: "1.0 1.0 0.1 0.1 500.0 500.0",   # HighECut
       5: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm
+    }
+  },
+  "ZPL2": {
+    "expr": "tbabs * ztbabs * powerlaw",
+        "params": {
+          # 1: ztbabs (Galactic nH) -> 5.38e21 cm^-2 = 0.538
+          1: "0.538 -1 0.0 0.0 100.0 100.0",
+          # 2: ztbabs (Intrinsic nH) -> 1.29e22 cm^-2 = 1.29
+          2: "1.29 -1 0.0 0.0 100.0 100.0",
+          # 3: ztbabs (Redshift)
+          3: "0.151 -1 0.0 0.0 10.0 10.0",
+          # 4: powerlaw (Photon Index) -> 自由
+          4: "1.5 0.1 -2.0 -2.0 5.0 5.0",
+          # 5: powerlaw (Norm) -> 自由
+          5: "2.0 0.01 0.0 0.0 1e10 1e10"
+        }
+  },
+  # Galactic nH (tbabs) * Intrinsic nH (ztbabs) * Cutoff Powerlaw
+  "ZCutoffPL2": {
+    "expr": "tbabs * ztbabs * cutoffpl",
+    "params": {
+      # 1: tbabs (Galactic nH)
+      1: "0.538 -1 0.0 0.0 100.0 100.0",
+      # 2: ztbabs (Intrinsic nH)
+      2: "1.29 -1 0.0 0.0 100.0 100.0",
+      # 3: ztbabs (Redshift)
+      3: "0.151 -1 0.0 0.0 10.0 10.0",
+      # 4: cutoffpl (Photon Index)
+      4: "1.5 0.1 -2.0 -2.0 5.0 5.0",
+      # 5: cutoffpl (HighECut keV) -> 自由
+      5: "1.0 1.0 0.1 0.1 500.0 500.0",
+      # 6: cutoffpl (Norm)
+      6: "2.0 0.01 0.0 0.0 1e10 1e10"
     }
   }
 }
@@ -124,7 +158,7 @@ def load_data(file_name, bkgtype="3c50"):
 
     print(f"Loaded: {s.fileName}")
 
-    s.ignore("**-0.3 10.0-**")
+    s.ignore(ignoreRange)
 
     return s
 
@@ -147,6 +181,24 @@ def run_fit(model_config):
   xspec.Fit.nIterations = 100
   xspec.Fit.query = "yes"
   xspec.Fit.perform()
+
+  # --- 誤差計算の追加ここから ---
+  # 90% 信頼区間 (delta chi2 = 2.706) を計算
+  # ここでは例として Photon Index (4番) と Norm (5番) の誤差を計算
+  print("\n--- Calculating Errors (90% confidence) ---")
+  try:
+      # 自由なパラメータ（frozenでないもの）を自動で判別して計算する場合
+      # 今回の ZPL2 なら 4 と 5 を指定
+      xspec.Fit.error("2.706 4 5")
+  except Exception as e:
+      print(f"Error calculation failed: {e}")
+
+  # 計算された誤差の取得例
+  pho_index = m(4).values[0]
+  pho_err_low = m(4).error[0]  # 下限値
+  pho_err_high = m(4).error[1] # 上限値
+  print(f"Photon Index: {pho_index:.4f} (-{pho_index-pho_err_low:.4f}, +{pho_err_high-pho_index:.4f})")
+  # --- 誤差計算の追加ここまで ---
 
   chi2 = xspec.Fit.statistic
   dof = xspec.Fit.dof
@@ -201,8 +253,8 @@ for bkgtype in ["3c50", "scorpion"]:
       continue
   x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(load_data(file_name, bkgtype))
 
-  ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
-  ax1.errorbar(x_vals, y_net, yerr=0, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
+  #ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
+  ax1.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
   #ax1.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
   ax1.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
 
@@ -221,7 +273,7 @@ for bkgtype in ["3c50", "scorpion"]:
       ax1.plot(x_vals, m_vals, label=f'{name}({bkgtype})($\chi^2_\\nu$={red_chi2:.2f})', linewidth=2)
 
     residuals = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y_net, m_vals, y_err)]
-    ax2.errorbar(x_vals, residuals, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})")
+    ax2.errorbar(x_vals, residuals, xerr=x_err, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})")
 
     row_data = list(zip(*[x_vals, y_tot, y_net, m_vals, y_err]))
     with open(f'{OUTPUT_DIR}/{file_name}_{bkgtype}_{name}.csv', 'w', newline='') as f:
@@ -246,7 +298,7 @@ ax2.axhline(0,color="black", linestyle='--', alpha=0.5)
 ax2.set_xscale('log')
 ax2.set_ylabel('(Data-Model)/Error')
 ax2.set_xlabel('Energy (keV)')
-#ax2.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
+ax2.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
 ax2.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
 ax2.grid(True, which="both", ls=":", alpha=0.5)
 

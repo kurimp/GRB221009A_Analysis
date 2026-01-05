@@ -150,7 +150,6 @@ try:
   )
   print(f"\n✅ Created: {out_grp_path}")
 
-  print(f"{src_files + bkg_files + rmf_files + arf_files}")
 
   for f in src_files + bkg_files + rmf_files + arf_files:
     try:
