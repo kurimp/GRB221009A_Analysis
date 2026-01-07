@@ -30,7 +30,8 @@ do
   obsID=$(echo "$segID" | cut -d'-' -f1)
 
   #input
-  clfile="${base_dir}/xti/event_cl/ni${obsID}_0mpu7_cl.evt"
+  clfile="${segID}/xti/event_cl/ni${segID}_0mpu7_cl.evt"
+  ufafile="${segID}/xti/event_cl/ni${segID}_0mpu7_ufa.evt"
   src_pha="${base_dir}/ni${segID}_src.pha"
   mkfile="${base_dir}/auxil/ni${obsID}.mkf"
   rmf_outfile="${base_dir}/ni${segID}.rmf"
@@ -49,12 +50,13 @@ do
 
     nibackgen3C50 rootdir="./" \
                   obsid="${segID}" \
+                  ufafile="${ufafile}" \
+                  clfile="${clfile}" \
                   bkgidxdir="CALDB" \
                   bkglibdir="CALDB" \
                   gainepoch="AUTO" \
                   bkgspec="${bkg_3c50}" \
                   totspec="${totspec}" \
-                  dtmin=10.0 dtmax=120.0 \
                   clobber=yes
 
     # 直前のコマンドの成否($?)をチェック

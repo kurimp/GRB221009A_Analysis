@@ -29,7 +29,7 @@ spectrum:
     systematic : 0.01
     ignoreRange : "**-1.0 8.0-**"
   path:
-    seg_list: scripts/seg_list.txt
+    seg_list: scripts/seg_list_all.txt
     base_dir: data/seg
     merge_output: results/spectrum/group_subset
     merge_list: scripts/test.txt

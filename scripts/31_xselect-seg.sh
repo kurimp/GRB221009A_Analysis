@@ -20,7 +20,7 @@ PI_MAX=1500
 
 echo "Settings: BinSize=${BINSIZE}s, PI=${PI_MIN}-${PI_MAX}"
 
-while IFS=',' read -r obsID segID TimeDataFile col4 col5
+while IFS=',' read -r obsID segID TimeDataFile _ _
 do
   echo "obsID: $obsID, segID: $segID, TimeDataFile: $TimeDataFile"
 
@@ -36,6 +36,10 @@ do
     continue
   fi
 
+  if [ -d "${seg_dir}" ]; then
+    rm -r "${seg_dir}"
+  fi
+
   echo "=== Copy obsfiles to segdir ==="
   if [ ! -d "${seg_dir}" ]; then
     mkdir -p "${seg_dir}"/auxil/
@@ -43,12 +47,12 @@ do
     mkdir -p "${seg_dir}"/xti/event_cl/
     cp -vr "${base_dir}"/xti/event_cl/ni"${obsID}"_0mpu7_cl.evt "${seg_dir}"/xti/event_cl/
     cp -vr "${base_dir}"/xti/event_cl/ni"${obsID}"_0mpu7_ufa.evt "${seg_dir}"/xti/event_cl/
-    mv "${seg_dir}"/xti/event_cl/ni"${obsID}"_0mpu7_ufa.evt "${seg_dir}"/xti/event_cl/ni"${segID}"_0mpu7_ufa.evt
   fi
 
   echo "=== Extracting LC: ${seg_dir} ==="
 
   clfile="${seg_dir}/xti/event_cl/ni${obsID}_0mpu7_cl.evt"
+  ufafile="${seg_dir}/xti/event_cl/ni${obsID}_0mpu7_ufa.evt"
   evtdir="${seg_dir}/xti/event_cl"
 
   if [ ! -f "${clfile}" ]; then
@@ -59,15 +63,17 @@ do
 
   # 出力ファイル名
   src_lc="${seg_dir}/ni${segID}_src_bin${BINSIZE}_from${PI_MIN}to${PI_MAX}.lc"
-  src_evt="${seg_dir}/xti/event_cl/ni${segID}_0mpu7_cl.evt"
+  src_cl="${seg_dir}/xti/event_cl/ni${segID}_0mpu7_cl.evt"
+  src_pha="${seg_dir}/ni${segID}_src.pha"
+  src_ufa="${seg_dir}/xti/event_cl/ni${segID}_0mpu7_ufa.evt"
   rm -f "${src_lc}"
 
   # xselect セッション設定
   session_name="session_src_${segID}"
   rm -f "${session_name}.xsl"
   clfilename=$(basename "${clfile}")
-  if [ ! -f "${src_evt}" ]; then
-    xselect <<EOF
+  ufafilename=$(basename "${ufafile}")
+  xselect <<EOF
 ${session_name}
 read event
 ${evtdir}
@@ -76,8 +82,11 @@ yes
 filter time file ${TimeDataFile}
 extract events
 save events
-${src_evt}
+${src_cl}
 yes
+extract spectrum
+save spectrum
+${src_pha}
 set binsize ${BINSIZE}
 filter pha_cutoff ${PI_MIN} ${PI_MAX}
 extract curve exposure=0.0
@@ -86,28 +95,20 @@ ${src_lc}
 exit
 no
 EOF
-  else
-    xselect <<EOF
+  xselect <<EOF
 ${session_name}
 read event
 ${evtdir}
-${clfilename}
+${ufafilename}
 yes
 filter time file ${TimeDataFile}
 extract events
 save events
-${src_evt}
+${src_ufa}
 yes
-yes
-set binsize ${BINSIZE}
-filter pha_cutoff ${PI_MIN} ${PI_MAX}
-extract curve exposure=0.0
-save curve
-${src_lc}
 exit
 no
 EOF
-  fi
   rm -f "${session_name}.xsl"
 
   if [ -f "${src_lc}" ]; then
