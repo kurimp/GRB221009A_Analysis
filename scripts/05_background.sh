@@ -70,23 +70,19 @@ do
   # --- 2. niscorpspect (SCORPEONモデル) ---
   echo "  [2/2] Running niscorpspect..."
 
-  (
-    cd ~ || { echo "Failed to cd to $DATA_BASE"; exit 1; }
+  niscorpspect infile="${src_pha}" \
+              outfile="${out_scorp}" \
+              mkfile="${mkfile}" \
+              selfile="${data_file_base}/${segID}/xti/event_cl/ni${obsID}_0mpu7_cl.evt" \
+              skyarffile="${skyarffile}" \
+              specrespfile="${rmf_outfile}" \
+              clobber=yes
 
-    niscorpspect infile="${src_pha}" \
-                outfile="${out_scorp}" \
-                mkfile="${mkfile}" \
-                selfile="${clfile}" \
-                skyarffile="${skyarffile}" \
-                specrespfile="${rmf_outfile}" \
-                clobber=yes
-
-    if [ $? -eq 0 ]; then
-        echo "    -> niscorpspect: OK"
-    else
-        echo "    -> ❌ niscorpspect: FAILED"
-    fi
-  )
+  if [ $? -eq 0 ]; then
+      echo "    -> niscorpspect: OK"
+  else
+      echo "    -> ❌ niscorpspect: FAILED"
+  fi
 
   echo "---------------------------------------------------"
 done
