@@ -1,3 +1,6 @@
 alias reload="source ~/.alias"
 alias activate=". .venv/bin/activate"
 alias py="python"
+alias cdw="cd /workspaces/HEASoft"
+alias tlog='tee /workspaces/HEASoft/log.log'
+alias tloga='tee -a /workspaces/HEASoft/log.log'

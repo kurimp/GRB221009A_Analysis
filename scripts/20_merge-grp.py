@@ -5,18 +5,15 @@ import pandas as pd
 from scripts.utils.read_config import cfg
 
 # --- 設定読み込み ---
-seg_info_path = os.path.join(cfg['segment']['path']['result_root'], cfg['segment']['path']['obs_list_name'])
 base_dir = cfg['spectrum']['path']['base_dir']
-trigger_mjd = cfg['general']['parameters']['trigger_time']
 grp_time = cfg['spectrum']['parameters']['grp_time']
+merge_list = cfg['spectrum']['path']['merge_list']
 
 # 出力ディレクトリ (絶対パス)
 merged_root = cfg['spectrum']['path']['merge_name']
 output_dir = os.path.join(cfg['spectrum']['path']['merge_output'], merged_root)
 os.makedirs(output_dir, exist_ok=True)
 
-# 一時リストファイル
-merge_list = cfg['spectrum']['path']['merge_list']
 
 if not os.path.exists(merge_list):
   print(f"❌ Error: Merge list not found: {merge_list}")

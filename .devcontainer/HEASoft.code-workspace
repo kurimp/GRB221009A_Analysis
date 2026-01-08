@@ -87,6 +87,8 @@
 			"TIMEDEL",
 			"TIMESYS",
 			"TIMEZERO",
+			"tlog",
+			"tloga",
 			"totspec",
 			"TSTART",
 			"ufafile",

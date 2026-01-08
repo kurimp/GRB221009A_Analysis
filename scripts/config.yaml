@@ -25,12 +25,12 @@ lightcurve:
     data-for-hist: results/lightcurve/seg02/bin120/from1200to1500/data.csv
 spectrum:
   parameters:
-    grp_time: 20
+    grp_time: 50
     systematic : 0.01
-    ignoreRange : "**-1.0 10.0-**"
+    ignoreRange : "**-4.0 8.0-**"
   path:
     seg_list: scripts/seg_list_all.txt
     base_dir: data/seg
     merge_output: results/spectrum/group_subset
-    merge_list: scripts/test.txt
-    merge_name: test
+    merge_list: scripts/seglist_group01-06.txt
+    merge_name: group01-06

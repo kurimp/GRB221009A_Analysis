@@ -75,9 +75,9 @@ MODELS = {
           # 3: ztbabs (Redshift)
           3: "0.151 -1 0.0 0.0 10.0 10.0",
           # 4: powerlaw (Photon Index) -> 自由
-          4: "1.5 0.1 -2.0 -2.0 5.0 5.0",
+          4: "1.8 0.1 -2.0 -2.0 5.0 5.0",
           # 5: powerlaw (Norm) -> 自由
-          5: "2.0 0.01 0.0 0.0 1e10 1e10"
+          5: "1.0 0.01 0.0 0.0 1e10 1e10"
         }
   },
   # Galactic nH (tbabs) * Intrinsic nH (ztbabs) * Cutoff Powerlaw
@@ -273,7 +273,7 @@ for bkgtype in ["3c50", "scorpion"]:
       ax1.plot(x_vals, m_vals, label=f'{name}({bkgtype})($\chi^2_\\nu$={red_chi2:.2f})', linewidth=2)
 
     residuals = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y_net, m_vals, y_err)]
-    ax2.errorbar(x_vals, residuals, xerr=x_err, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})")
+    ax2.errorbar(x_vals, residuals, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})")
 
     row_data = list(zip(*[x_vals, y_tot, y_net, m_vals, y_err]))
     with open(f'{OUTPUT_DIR}/{file_name}_{bkgtype}_{name}.csv', 'w', newline='') as f:
