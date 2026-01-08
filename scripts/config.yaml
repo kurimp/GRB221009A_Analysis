@@ -27,7 +27,7 @@ spectrum:
   parameters:
     grp_time: 20
     systematic : 0.01
-    ignoreRange : "**-1.0 8.0-**"
+    ignoreRange : "**-1.0 10.0-**"
   path:
     seg_list: scripts/seg_list_all.txt
     base_dir: data/seg

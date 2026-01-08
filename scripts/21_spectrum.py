@@ -208,7 +208,7 @@ def run_fit(model_config):
   if tf_eeufspec:
     xspec.Plot("eeufspec")
   elif not tf_eeufspec:
-    xspec.Plot.area = True
+    #xspec.Plot.area = True
     xspec.Plot("data")
 
   m_vals = xspec.Plot.model()
@@ -224,7 +224,7 @@ def treat_data(s):
     m_dummy.powerlaw.norm = 1.0
     xspec.Plot("eeufspec")
   elif not tf_eeufspec:
-    xspec.Plot.area = True
+    #xspec.Plot.area = True
     xspec.Plot("data")
 
   x_vals = xspec.Plot.x()

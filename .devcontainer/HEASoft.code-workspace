@@ -96,6 +96,7 @@
 			"xerr",
 			"xlim",
 			"xscale",
+			"xsel_timefile",
 			"xselect",
 			"xspec",
 			"yerr",
