@@ -16,6 +16,9 @@ result_figure = os.path.join(csvs_dir, "figure.png")
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
 plt.subplots_adjust(hspace=0.0)
 
+colors = ["C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9"]
+i=0
+
 for file in list_datafilename:
   print(f"{file=}")
   name = file.split("_")[0].split("/")[1]
@@ -28,11 +31,11 @@ for file in list_datafilename:
   y_mod = df['Model_Values']
   res_sig = df['Residuals_Sigma']
 
-  ax1.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net({name})', alpha=0.3)
+  ax1.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net({name})', alpha=0.3, color=colors[i])
 
-  ax1.plot(x_vals, y_mod, label=f'{name}(model)', linewidth=2)
+  ax1.plot(x_vals, y_mod, label=f'{name}(model)', linewidth=2, color=colors[i])
 
-  trigger_sigma = 1.5
+  trigger_sigma = 2
 
   filter_list = (df['Residuals_Sigma']<-trigger_sigma)|(trigger_sigma<df['Residuals_Sigma'])
 
@@ -40,7 +43,9 @@ for file in list_datafilename:
   x_vals = x_vals[filter_list]
   x_err = x_err[filter_list]
 
-  ax2.errorbar(x_vals, res_sig, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({name})")
+  ax2.errorbar(x_vals, res_sig, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({name})", color=colors[i])
+
+  i += 1
 
 fig.suptitle(f'GRB221009A NICER Spectrums')
 
