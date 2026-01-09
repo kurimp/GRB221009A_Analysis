@@ -275,11 +275,26 @@ for bkgtype in ["3c50", "scorpion"]:
     residuals = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y_net, m_vals, y_err)]
     ax2.errorbar(x_vals, residuals, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})")
 
-    row_data = list(zip(*[x_vals, y_tot, y_net, m_vals, y_err]))
-    with open(f'{OUTPUT_DIR}/{file_name}_{bkgtype}_{name}.csv', 'w', newline='') as f:
+    csv_path = os.path.join(OUTPUT_DIR, f'{file_name}_{bkgtype}_{name}.csv')
+
+    row_data = zip(x_vals, x_err, y_tot, y_net, y_err, m_vals, residuals)
+
+    with open(csv_path, 'w', newline='') as f:
       writer = csv.writer(f)
-      writer.writerow(['x_vals', 'y_tot', 'y_net', 'm_vals', 'y_err'])
+      # ヘッダーを分かりやすく記述（単位など）
+      header = [
+        'Energy_keV',       # x_vals
+        'Energy_Error_keV', # x_err (ビン幅の半分)
+        'Total_Counts',     # y_tot
+        'Net_Counts',       # y_net
+        'Net_Error',        # y_err
+        'Model_Values',     # m_vals
+        'Residuals_Sigma'   # residuals ((data-model)/error)
+      ]
+      writer.writerow(header)
       writer.writerows(row_data)
+
+    print(f"  Saved CSV: {csv_path}")
 
 fig.suptitle(f'GRB221009A NICER Spectrum Fit:{file_name}')
 
