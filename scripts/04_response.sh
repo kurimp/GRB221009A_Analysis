@@ -3,7 +3,7 @@
 CONFIG="scripts/config.yaml"
 
 LIST_FILE=$(yq -r '.spectrum.path.seg_list' "$CONFIG")
-data_file_base=$(yq -r '.spectrum.path.base_dir' $CONFIG)
+data_file_base=$(yq -r '.spectrum.path.base_dir' $CONFIG)quit
 ra=$(yq -r '.general.parameters.ra' $CONFIG)
 dec=$(yq -r '.general.parameters.dec' $CONFIG)
 
@@ -46,11 +46,13 @@ do
             selfile="${clfile}" \
             ra="${ra}" \
             dec="${dec}" \
+            detlist="launch,-14,-34" \
             clobber=yes
 
   nicerrmf infile="${infile}" \
             mkfile="${mkfile}" \
             outfile="${rmf_outfile}" \
+            detlist="launch,-14,-34" \
             clobber=yes
 
   nicerarf infile="${infile}" \
@@ -60,6 +62,7 @@ do
             profile="flat" \
             ra="${ra}" \
             dec="${dec}" \
+            detlist="launch,-14,-34" \
             clobber=yes
 
   if [ ! -f "${clfile}" ]; then

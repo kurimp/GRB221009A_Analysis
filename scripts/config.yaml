@@ -32,6 +32,7 @@ spectrum:
     seg_list: scripts/seg_list_all.txt
     base_dir: data/seg
     merge_output: results/spectrum/group_subset
+    spectrums: box
+    summary: results/spectrum
     merge_list: scripts/seglist_group01-06.txt
     merge_name: group01-06
-    spectrums: box

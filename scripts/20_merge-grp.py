@@ -35,7 +35,7 @@ for _, row in df.iterrows():
   dir_path = os.path.join(base_dir, segID)
 
   # ファイルパス (絶対パスに変換)
-  src_path = os.path.abspath(os.path.join(dir_path, f"ni{segID}_src.pha"))
+  src_path = os.path.abspath(os.path.join(dir_path, f"ni{segID}_tot.pi"))
   rmf_path = os.path.abspath(os.path.join(dir_path, f"ni{segID}.rmf"))
   arf_path = os.path.abspath(os.path.join(dir_path, f"ni{segID}.arf"))
 
@@ -53,7 +53,7 @@ for _, row in df.iterrows():
   # ファイル存在確認
   if os.path.exists(src_path) and bkg_path and os.path.exists(rmf_path) and os.path.exists(arf_path):
 
-    lname_src = f"seg{valid_count:03d}_src.pha"
+    lname_src = f"seg{valid_count:03d}_tot.pha"
     lname_bkg = f"seg{valid_count:03d}_bkg.pha"
     lname_rmf = f"seg{valid_count:03d}.rmf"
     lname_arf = f"seg{valid_count:03d}.arf"

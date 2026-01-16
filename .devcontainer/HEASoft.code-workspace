@@ -83,6 +83,7 @@
 			"seglist",
 			"selfile",
 			"set_xlabel",
+			"setplot",
 			"sharex",
 			"shellcheck",
 			"skyarffile",

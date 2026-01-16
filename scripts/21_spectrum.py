@@ -6,6 +6,8 @@ import os
 import csv
 import sys
 from scripts.utils.read_config import cfg
+import datetime
+import scipy.stats
 
 #===========config===========
 #plotのy軸表記選択。FluxならTrue。
@@ -71,7 +73,7 @@ MODELS = {
           # 1: ztbabs (Galactic nH) -> 5.38e21 cm^-2 = 0.538
           1: "0.538 -1 0.0 0.0 100.0 100.0",
           # 2: ztbabs (Intrinsic nH) -> 1.29e22 cm^-2 = 1.29
-          2: "1.29 -1 0.0 0.0 100.0 100.0",
+          2: "1.29 -1",
           # 3: ztbabs (Redshift)
           3: "0.151 -1 0.0 0.0 10.0 10.0",
           # 4: powerlaw (Photon Index) -> 自由
@@ -143,8 +145,6 @@ def load_data(file_name, bkgtype="3c50"):
       return None
 
     s = xspec.Spectrum(data_filename)
-
-    xspec.AllModels.systematic = systematic
 
     s.background = bkg_filename
 
@@ -295,6 +295,76 @@ for bkgtype in ["3c50", "scorpion"]:
       writer.writerows(row_data)
 
     print(f"  Saved CSV: {csv_path}")
+
+# ==========================================
+    # ★追加: 解析結果サマリー(パラメータ等)の保存
+    # ==========================================
+    summary_dir = cfg["spectrum"]["path"]["summary"]
+    summary_csv_path = os.path.join(summary_dir, 'summary.csv')
+
+    run_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    try:
+      exposure = xspec.AllData(1).exposure
+    except:
+      exposure = 0
+
+    target_param_idx = 4
+    val = m(target_param_idx).values[0]
+
+    err_low_val = m(target_param_idx).error[0]
+    err_high_val = m(target_param_idx).error[1]
+
+    if err_low_val != 0 and err_high_val != 0:
+      err_minus = val - err_low_val
+      err_plus = err_high_val - val
+    else:
+      err_minus = 0
+      err_plus = 0
+
+    stat_val = xspec.Fit.statistic
+    dof_val = xspec.Fit.dof
+
+    try:
+      nhp = scipy.stats.chi2.sf(stat_val, dof_val)
+    except:
+      nhp = 0.0
+
+    # CSVへの書き込み (追記モード 'a')
+    file_exists = os.path.isfile(summary_csv_path)
+
+    with open(summary_csv_path, 'a', newline='') as f:
+      writer = csv.writer(f)
+
+      # ファイルが新規作成のときだけヘッダーを書く
+      if not file_exists:
+        header = [
+          'Exec_Date',       # 実行日時
+          'Group_Name',      # groupの名前
+          'Exposure_s',      # Exposure
+          'Photon_Index',    # Photon Index
+          'Error_Minus',     # -
+          'Error_Plus',      # +
+          'Fit_Stat_Chi2',   # Fit Stat.
+          'DOF',             # d.o.f.
+          'Nhp'              # Nhp
+        ]
+        writer.writerow(header)
+
+      # データ行
+      writer.writerow([
+        run_time,
+        file_name,
+        exposure,
+        f"{val:.5f}",
+        f"{err_minus:.5f}",
+        f"{err_plus:.5f}",
+        f"{stat_val:.2f}",
+        dof_val,
+        f"{nhp:.3e}"
+      ])
+
+    print(f"  Saved Summary: {summary_csv_path}")
 
 fig.suptitle(f'GRB221009A NICER Spectrum Fit:{file_name}')
 

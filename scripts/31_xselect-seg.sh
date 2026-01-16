@@ -102,6 +102,7 @@ ${evtdir}
 ${ufafilename}
 yes
 filter time file ${TimeDataFile}
+select events "DET_ID != 14 && DET_ID != 34"
 extract events
 save events
 ${src_ufa}
