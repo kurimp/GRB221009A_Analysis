@@ -190,7 +190,7 @@ def run_spectrum_analysis(cfg):
     try:
         # 自由なパラメータ（frozenでないもの）を自動で判別して計算する場合
         # 今回の ZPL2 なら 4 と 5 を指定
-        xspec.Fit.error("2.706 4 5")
+        xspec.Fit.error("2.706 1 2 3 4 5")
     except Exception as e:
         print(f"Error calculation failed: {e}")
 
@@ -307,18 +307,36 @@ def run_spectrum_analysis(cfg):
       except:
         exposure = 0
 
+      def error_pm(val, err_low, err_high):
+        if err_low != 0 and err_high != 0:
+          err_minus = val - err_low
+          err_plus = err_high - val
+        else:
+          err_minus = 0
+          err_plus = 0
+        return err_minus, err_plus
+
+      #ztbabs
+      target_param_idx = 2
+
+      param = m(target_param_idx)
+      param02_val = param.values[0]
+
+      param02_err = error_pm(param02_val, param.error[0], param.error[1])
+
+      param02_err_plus = param02_err[0]
+      param02_err_minus = param02_err[1]
+
+      #Photon Index
       target_param_idx = 4
-      val = m(target_param_idx).values[0]
 
-      err_low_val = m(target_param_idx).error[0]
-      err_high_val = m(target_param_idx).error[1]
+      param = m(target_param_idx)
+      param04_val = param.values[0]
 
-      if err_low_val != 0 and err_high_val != 0:
-        err_minus = val - err_low_val
-        err_plus = err_high_val - val
-      else:
-        err_minus = 0
-        err_plus = 0
+      param04_err = error_pm(param04_val, param.error[0], param.error[1])
+
+      param04_err_plus = param04_err[0]
+      param04_err_minus = param04_err[1]
 
       stat_val = xspec.Fit.statistic
       dof_val = xspec.Fit.dof
@@ -328,7 +346,6 @@ def run_spectrum_analysis(cfg):
       except:
         nhp = 0.0
 
-      # CSVへの書き込み (追記モード 'a')
       file_exists = os.path.isfile(summary_csv_path)
 
       with open(summary_csv_path, 'a', newline='') as f:
@@ -340,9 +357,12 @@ def run_spectrum_analysis(cfg):
             'Exec_Date',       # 実行日時
             'Group_Name',      # groupの名前
             'Exposure_s',      # Exposure
+            'zTBabs_nH_val',
+            'zTBabs_nH_err_minus',
+            'zTBabs_nH_err_plus',
             'Photon_Index',    # Photon Index
-            'Photon_Index_Error_Minus',     # -
-            'Photon_Index_Error_Plus',      # +
+            'Photon_Index_err_minus',     # -
+            'Photon_Index_err_plus',      # +
             'Fit_Stat_Chi2',   # Fit Stat.
             'DOF',             # d.o.f.
             'Nhp'              # Nhp
@@ -354,9 +374,12 @@ def run_spectrum_analysis(cfg):
           run_time,
           file_name,
           exposure,
-          f"{val:.5f}",
-          f"{err_minus:.5f}",
-          f"{err_plus:.5f}",
+          f"{param02_val:.5f}",
+          f"{param02_err_minus:.5f}",
+          f"{param02_err_plus:.5f}",
+          f"{param04_val:.5f}",
+          f"{param04_err_minus:.5f}",
+          f"{param04_err_plus:.5f}",
           f"{stat_val:.2f}",
           dof_val,
           f"{nhp:.3e}"

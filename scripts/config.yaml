@@ -40,4 +40,4 @@ spectrum02:
   path:
     list_dir: lists
     seglistlist_csv: seglist_ext.csv
-    seglist_basename: seglist_indiv
+    seglist_basename: seglist_group02
