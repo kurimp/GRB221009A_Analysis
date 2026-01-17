@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cp -r data_container/raw/GRB221009A/. data/obs/
+#cp -r data_container/raw/GRB221009A/. data/obs/
 
 . scripts/01_nicerl2.sh
 . scripts/31_xselect-seg.sh

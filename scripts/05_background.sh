@@ -55,6 +55,7 @@ do
                   bkgidxdir="CALDB" \
                   bkglibdir="CALDB" \
                   gainepoch="AUTO" \
+                  fpmofflist="14,34" \
                   bkgspec="${bkg_3c50}" \
                   totspec="${totspec}" \
                   clobber=yes

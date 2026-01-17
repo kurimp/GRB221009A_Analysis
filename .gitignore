@@ -6,6 +6,7 @@ data_container/
 terminal_logs/
 results/
 box/
+lists/
 *.evt
 *.pha
 *.arf

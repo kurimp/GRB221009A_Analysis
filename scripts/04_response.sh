@@ -3,7 +3,7 @@
 CONFIG="scripts/config.yaml"
 
 LIST_FILE=$(yq -r '.spectrum.path.seg_list' "$CONFIG")
-data_file_base=$(yq -r '.spectrum.path.base_dir' $CONFIG)quit
+data_file_base=$(yq -r '.spectrum.path.base_dir' $CONFIG)
 ra=$(yq -r '.general.parameters.ra' $CONFIG)
 dec=$(yq -r '.general.parameters.dec' $CONFIG)
 
@@ -23,6 +23,7 @@ do
   base_dir="${data_file_base}/${segID}"
 
   if [ ! -d "${base_dir}" ]; then
+    echo ${base_dir}
     echo "Error: Directory '${segID}' not found. Skipping."
     continue
   fi
