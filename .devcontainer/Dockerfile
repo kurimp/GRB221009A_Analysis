@@ -10,11 +10,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     git \
     sudo \
+    bsdmainutils \
     curl \
     vim \
     nano \
     tree \
     locales \
+    jq \
+    tmux \
+    shellcheck \
     python3.10-venv \
     && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     && locale-gen en_US.UTF-8 \
@@ -41,9 +45,14 @@ RUN sudo chown heasoft /home/heasoft/.setup_log.sh \
     && chmod +x /home/heasoft/.setup_log.sh \
     && echo 'source $HOME/.setup_log.sh' >> ~/.bashrc
 
-# 1. Starship (プロンプト) のインストール
 RUN curl -sS https://starship.rs/install.sh | sudo sh -s -- -y \
     && echo 'eval "$(starship init bash)"' >> ~/.bashrc
+
+RUN mkdir -p /home/heasoft/.config
+
+COPY starship.toml /home/heasoft/.config/starship.toml
+
+RUN sudo chown heasoft:heasoft /home/heasoft/.config/starship.toml
 
 # (オプション) 初回起動時のコマンド
 CMD ["/bin/bash"]

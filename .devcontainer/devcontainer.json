@@ -1,6 +1,5 @@
 {
   "name": "HEASoft Analysis Environment",
-  // "image": "heasoft:v6.36",
   "runArgs": [
     "--rm"
   ],
@@ -8,30 +7,60 @@
     "dockerfile": "Dockerfile"
   },
   "containerEnv": {
+    "PYTHONPATH": "${containerWorkspaceFolder}",
     "CALDB": "/home/heasoft/CALDB",
     "GEOMAG_PATH": "/home/heasoft/CALDB/data/gen/pcf/geomag"
   },
   "mounts": [
-    // 1. CALDBのマウント
     "source=/home/isseikurihara/HEASoft/CALDB,target=/home/heasoft/CALDB,type=bind",
-    
-    // 2. 重たい観測データのマウント (Git管理外の安全地帯)
-    // ここがコンテナ内の /home/heasoft/data になります
     "source=/home/isseikurihara/HEASoft/data_container/GRB221009A,target=/home/heasoft/data,type=bind"
   ],
   "customizations": {
     "vscode": {
+      "settings":{
+        "editor.formatOnSave": true, // 保存時に自動整形
+        "editor.guides.bracketPairs": true, // 括弧の対応を見やすく
+        "editor.stickyScroll.enabled": true, // スクロール時にクラス/関数名を表示
+        
+        // --- Python設定 (Ruff一本化) ---
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit", // 未使用import削除などを自動化
+            "source.organizeImports": "explicit"
+          }
+        },
+        
+        // --- Bash設定 ---
+        "[shellscript]": {
+          "editor.defaultFormatter": "foxundermoon.shell-format",
+          "editor.tabSize": 2 // シェルスクリプトは2スペースが一般的
+        },
+        "shellcheck.enable": true, // バグ検知を有効化
+        
+        // --- その他ツール設定 ---
+        "files.trimTrailingWhitespace": true // 行末の余計な空白を削除
+      },
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "eamodio.gitlens",
         "mhutchie.git-graph",
         "oderwat.indent-rainbow",
         "janisdd.vscode-edit-csv",
-        "mechatroner.rainbow-csv"
+        "mechatroner.rainbow-csv",
+        "streetsidesoftware.code-spell-checker",
+        "oderwat.indent-rainbow",
+        "sirtori.indenticator",
+        "wayou.vscode-todo-highlight",
+        "mosapride.zenkaku",
+        "alefragnani.project-manager",
+        "pkief.material-icon-theme",
+        "tonybaloney.vscode-pets",
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format"
       ]
     }
   },
   // 起動時の初期設定
-  "postCreateCommand": "echo 'export CALDB=/home/heasoft/CALDB' >> ~/.bashrc && echo 'export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag' >> ~/.bashrc && . .venv/bin/activate"
+  "postCreateCommand": "bash -c \"ln -sf ${containerWorkspaceFolder}/.devcontainer/.alias ~/.alias && (grep -qF '. ~/.alias' ~/.bashrc || echo '[ -f ~/.alias ] && . ~/.alias' >> ~/.bashrc) && echo 'export CALDB=/home/heasoft/CALDB' >> ~/.bashrc && echo 'export GEOMAG_PATH=/home/heasoft/CALDB/data/gen/pcf/geomag' >> ~/.bashrc\""
 }

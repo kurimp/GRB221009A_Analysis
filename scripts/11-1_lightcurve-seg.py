@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from astropy.time import Time
@@ -8,66 +10,34 @@ import csv
 import sys
 import glob
 import pandas as pd
-import math
-import argparse
 from lmfit.models import PowerLawModel
 from lmfit.models import Model
+from scripts.utils.read_config import cfg
 
-# --- 引数設定 ---
-parser = argparse.ArgumentParser(
-  description="Lightcurve processing script.",
-  formatter_class=argparse.RawTextHelpFormatter
-)
-
-# 必須のディレクトリ引数
-parser.add_argument("data_directory", type=str, help="The path to the directory containing the observational data files.")
-
-# オプション：時間除外 (例: --time 2025-01-01...)
-parser.add_argument("--since", type=str, default=None,
-                    help="Optional timestamp to exclude data after this time.\nFormat: ISO 8601 (e.g., 2025-10-31T12:00:00.000)")
-
-# オプション：除外ObsIDリスト (例: --exclude 5410670113,5410670114,5410670115)
-parser.add_argument("--exclude", type=str, default=None,
-                    help="Optional comma-separated list of ObsIDs to exclude.\nExample: 5410670113,5410670114,5410670115")
-
-args = parser.parse_args()
-
-# --- 値の取得と処理 ---
-dirname = args.data_directory
-
-# 時間の処理
-since_time = None
-if args.since:
-  try:
-    since_time = Time(args.since, format='isot', scale="tt")
-  except ValueError:
-    print(f"❌ Error: Invalid time format '{args.since}'. Please use ISO 8601.")
-    sys.exit(1)
-
-# ObsIDリストの処理（カンマ区切りの文字列をリストに変換）
-excluded_obsids = []
-if args.exclude:
-  # "101, 102, 103" -> ['101', '102', '103']
-  excluded_obsids = [obs_id.strip() for obs_id in args.exclude.split(',')]
+dirname = cfg['lightcurve']['path']['collect-datas']
+xmin = cfg['lightcurve']['parameters']['lc_xmin']
+xmax = cfg['lightcurve']['parameters']['lc_xmax']
+ymin = cfg['lightcurve']['parameters']['lc_ymin']
+ymax = cfg['lightcurve']['parameters']['lc_ymax']
 
 # --- 確認用出力 ---
 print(f"Data Directory: {dirname}")
-print(f"Exclusion Time: {since_time}")
-print(f"Excluded ObsIDs: {excluded_obsids}")
 
 list_datafilename = sorted(glob.glob(os.path.join(dirname, "*.lc")))
 
 list_time_elapsed_indiv = []
 list_rate_indiv = []
 list_error_indiv = []
+list_segID_indiv = []
 
-list_time_elapsed_ObsID = []
-list_rate_ObsID = []
-list_error_ObsID = []
+list_time_elapsed_segID = []
+list_rate_segID = []
+list_error_segID = []
+list_segID_segID = []
 
 fig, ax = plt.subplots(figsize=(10, 6))
 
-df_info = pd.DataFrame(columns=['OBS-ID', 'DATE-OBS', 'DATE-END', 'EXPOSURE'])
+df_info = pd.DataFrame(columns=['segID', 'DATE-OBS', 'DATE-END', 'EXPOSURE'])
 
 for datafilename in list_datafilename:
   datapath = datafilename
@@ -84,28 +54,38 @@ for datafilename in list_datafilename:
     time_system = header_rate.get('TIMESYS', 'TT').lower()
     
     #NICERミッション基準時刻の取得
-    mjd_ref = header_rate['MJDREFI']
+    mjd_ref = header_rate['MJDREFI'] + header_rate['MJDREFF']
     t_ref_absolute = Time(mjd_ref, format='mjd', scale=time_system.lower())
     
-    #観測開始までの通算秒の取得と単位sの付与
-    t_start_met_sec = u.Quantity(header_rate.get('TSTART', 0.0), u.s)
+    data = datafile['RATE'].data
+    time = data['TIME']
+    rate = data['RATE']
+    error = data['ERROR']
     
-    #観測開始時刻の計算
-    t_obs_start = t_ref_absolute + t_start_met_sec
+    time_zero_val = header_rate.get('TIMEZERO', '0.0')
+    t_start_val = header_rate.get('TSTART', '0.0')
     
-    ObsID = header_primary.get('OBS_ID', 'N/A')
-    print(f"OBS-ID:{ObsID}")
-    print(f"観測開始時刻:{t_obs_start.isot}")
+    #base_met:そのsegIDの観測開始時点のMET
+    if abs(time_zero_val) > 1e8:
+      base_met = time_zero_val
+    elif time[0] > 1e8:
+      base_met = time_zero_val
+    else:
+      base_met = t_start_val + time_zero_val
     
-    #除外時刻の判定
-    if since_time is not None and t_obs_start >= since_time:
-      print("The Observation Time is after the specified 'since' time.")
-      continue
+    #それぞれを時"間"に変換
+    base_met_delta = u.Quantity(base_met, u.s)
+    time_col_delta = u.Quantity(time, u.s)
     
-    #除外ObsIDの判定
-    if str(ObsID) in excluded_obsids:
-      print(f"The ObsID({ObsID}) is specified for exclusion.")
-      continue
+    #SegID開始時刻=NICER基準時刻+SegID開始までの時間
+    t_seg_start = t_ref_absolute + base_met_delta
+    
+    #データ点の絶対時刻=SegID開始時刻+観測開始からデータ点までの時間
+    time_abs = t_seg_start + time_col_delta
+    
+    segID = os.path.basename(datapath).split("_src_")[0].replace("ni", "")
+    print(f"segID:{segID}")
+    print(f"観測開始時刻:{t_seg_start.isot}")
     
     if display_info:
       print(f"MJDREF:{mjd_ref}")
@@ -114,57 +94,46 @@ for datafilename in list_datafilename:
       print(f"DATE-END:{header_primary.get('DATE-END', 'N/A')}")
       print(f"EXPOSURE:{header_rate.get('EXPOSURE', '0.0')}")
       print(f"TIMESYS:{time_system}")
-    data = datafile['RATE'].data
+      print(f"TIMEZERO:{header_rate.get('TIMEZERO', '0.0')}")
     
     if data is None or len(data) == 0:
-      print(f"⚠️ Warning: No data found in {datafilename} (ObsID: {ObsID}). Skipping...")
+      print(f"⚠️ Warning: No data found in {datafilename} (segID: {segID}). Skipping...")
       continue
     
-    #if header_rate.get('EXPOSURE', '0.0') < 500:
-    #  print(f"Skipping...")
-    #  continue
-    
-    #各ObsIDの観測開始時刻、観測終了時刻の表の作成
-    _df_info = pd.DataFrame({'OBS-ID':header_primary.get('OBS_ID', 'N/A'), 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
+    #各segIDの観測開始時刻、観測終了時刻の表の作成
+    _df_info = pd.DataFrame({'segID':segID, 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
     df_info = pd.concat([df_info, _df_info])
     
-    #各点のデータの代入
-    time = data['TIME']
-    rate = data['RATE']
-    error = data['ERROR']
+    #トリガーからの経過時間=データ点の絶対時刻-トリガー時刻
+    trigger_MJD = cfg['general']['parameters']['trigger_time']
+    time_abs_from_trigger = (time_abs - Time(trigger_MJD, format='mjd', scale='utc')).to_value(u.s)
     
-    #観測開始時刻からの経過時間への単位sの付与
-    time_elapsed_from_start = u.Quantity(time, u.s)
+    #bin幅の取得
+    bin_width = header_rate.get('TIMEDEL', 0.0)
     
-    #データの絶対時刻の計算
-    time_abs = t_obs_start + time_elapsed_from_start
-    
-    time_abs_from_trigger = time_abs - Time(59861.55346065, format='mjd', scale=time_system.lower())
-    
-    #datetimeオブジェクトに変換
-    time_abs_datetime = time_abs.datetime
-    
-    duration = ((time_abs_from_trigger[-1]+u.Quantity(60, u.s))-time_abs_from_trigger[0]).to_value(u.s)
+    duration = ((time_abs_from_trigger[-1]+bin_width)-time_abs_from_trigger[0])
     count_average = rate.mean()
     count_sum = count_average * duration
     
-    count_error = math.sqrt(count_sum) / duration
+    count_error = np.sqrt(np.sum(error**2)) / len(error)
+    
+    segID_list = [segID for _ in range(len(time_abs_from_trigger))]
     
     list_time_elapsed_indiv.extend(time_abs_from_trigger)
     list_rate_indiv.extend(rate)
     list_error_indiv.extend(error)
+    list_segID_indiv.extend(segID_list)
     
-    list_time_elapsed_ObsID.append(time_abs_from_trigger[0])
-    list_rate_ObsID.append(count_average)
-    list_error_ObsID.append(count_error)
-    
-    time_abs_from_trigger = [int(td.to_value(u.s)) for td in time_abs_from_trigger]
+    list_time_elapsed_segID.append(time_abs_from_trigger[0])
+    list_rate_segID.append(count_average)
+    list_error_segID.append(count_error)
+    list_segID_segID.append(segID)
 
 for _ in range(5):
   try:
-    tf_ana = input("Enter 1 for analysis per ObsID, or 0 otherwise (default is 0).:")
+    tf_ana = input("Enter 1 for analysis per segID, or 0 otherwise (default is 1).:")
     if tf_ana == "":
-      tf_ana = False
+      tf_ana = True
     else:
       tf_ana = bool(int(tf_ana))
   except Exception:
@@ -175,18 +144,20 @@ else:
   print("Processing interrupted.")
 
 if tf_ana:
-  title_disc = "ObsID"
-  list_time_elapsed = list_time_elapsed_ObsID
-  list_rate = list_rate_ObsID
-  list_error = list_error_ObsID
+  title_disc = "segID"
+  list_time_elapsed = list_time_elapsed_segID
+  list_rate = list_rate_segID
+  list_error = list_error_segID
+  list_segID = list_segID_segID
 elif not tf_ana:
   title_disc = "Indiv"
   list_time_elapsed = list_time_elapsed_indiv
   list_rate = list_rate_indiv
   list_error = list_error_indiv
+  list_segID = list_segID_indiv
 
-list_time_elapsed_second = [int(td.to_value(u.s)) for td in list_time_elapsed]
-zip_datas = zip(list_time_elapsed_second, list_rate, list_error)
+list_time_elapsed_second = [td for td in list_time_elapsed]
+zip_datas = zip(list_segID, list_time_elapsed_second, list_rate, list_error)
 
 for _ in range(5):
   try:
@@ -202,15 +173,15 @@ for _ in range(5):
 else:
   print("Processing interrupted.")
 
-zip_datas = sorted(zip_datas, key=lambda row: row[0])
+zip_datas = sorted(zip_datas, key=lambda row: row[1])
 list_datas = list(zip(*zip_datas))
 
-ax.errorbar(list_datas[0], list_datas[1], yerr=list_datas[2], fmt='x', capsize=0, label="data", alpha = 0.5)
-#ax.axvline(datetime(2022, 10, 9, 13, 16, 59), linestyle='--', color="black")
+segID_data = np.array(list_datas[0])
+x_data = np.array(list_datas[1])
+y_data = np.array(list_datas[2])
+error_data = np.array(list_datas[3])
 
-x_data = np.array(list_datas[0])
-y_data = np.array(list_datas[1])
-error_data = np.array(list_datas[2])
+ax.errorbar(x_data, y_data, error_data, fmt='x', capsize=0, label="data", alpha = 0.5)
 
 def BrokenPowerLawModel(x, amplitude, t_break, alpha1, alpha2):
   """
@@ -223,10 +194,12 @@ def BrokenPowerLawModel(x, amplitude, t_break, alpha1, alpha2):
   # x < t_break の部分と x >= t_break の部分で式を変える
   # ※計算を安定させるため、t_breakで正規化して繋げることが多いです
   
+  x = np.array(x, dtype=float)
+  
   if t_break <= 0:
     return np.ones_like(x) * 1e30
   
-  model_output = np.zeros_like(x)
+  model_output = np.zeros_like(x, dtype=float)
   
   # ブレイク前
   mask1 = x < t_break
@@ -247,6 +220,7 @@ if tf:
     print("Error: No valid data points for fitting (all errors are 0 or x <= 0).")
     sys.exit(1)
   
+  segID_safe = segID_data[valid_mask]
   x_safe = x_data[valid_mask]
   y_safe = y_data[valid_mask]
   error_safe = error_data[valid_mask]
@@ -293,12 +267,12 @@ ax.set_xlabel('Elapsed Time from the Fermi-GBM trigger(2022 October 9 at 13:16:5
 ax.set_ylabel('Rate (counts/s)')
 ax.set_xscale('log')
 ax.set_yscale('log')
-#ax.set_xlim(1, None)
-ax.set_ylim(None, 10000)
+ax.set_xlim(xmin, xmax)
+ax.set_ylim(ymin, ymax)
 #ax.set_xlim(datetime(2022, 10, 9, 0, 0, 0), datetime(2022, 10, 30, 0, 0, 0))
 
 #ax.grid(True, which='both', linestyle=':', alpha=0.6)
-ax.axhline(0.36666667, linestyle='--', color="black", alpha=0.5)
+ax.axhline(0.094, linestyle='--', color="black", alpha=0.5)
 ax.minorticks_on()
 
 #date_form = mdates.DateFormatter('%Y/%m/%d %H')
@@ -314,16 +288,16 @@ data_name = data_path.replace("/", "_")
 result_file_path = os.path.join("results", "lightcurve", data_path)
 os.makedirs(result_file_path, exist_ok=True)
 
-ObsInfo_path = os.path.join(result_file_path, "ObsInfo.csv")
+segInfo_path = os.path.join(result_file_path, "segInfo.csv")
 result_data_path = os.path.join(result_file_path, "data.csv")
 image_path = os.path.join(result_file_path, f"{title_disc}.png")
 
-df_info.to_csv(ObsInfo_path)
+df_info.to_csv(segInfo_path)
 
 with open(result_data_path, 'w', newline='', encoding='utf-8') as f:
-  writer = csv.writer(f)
-  writer.writerow(['time', 'rate', 'error'])
-  for (a, b, c) in zip_datas:
-    writer.writerow((a, b, c))
+  writer = csv.writer( f)
+  writer.writerow(['segID', 'time', 'rate', 'error'])
+  for (a, b, c, d) in zip_datas:
+    writer.writerow((a, b, c, d))
 
 plt.savefig(image_path, format="png", dpi=300)
