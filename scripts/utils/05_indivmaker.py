@@ -1,8 +1,10 @@
 import os
+from scripts.utils.read_config import cfg
 
-# 設定
-input_file = 'seglist_indiv.csv'
-output_dir = 'scripts/individual_csvs'
+lists_dir = cfg['spectrum02']['path']['list_dir']
+output_basename = cfg['spectrum02']['path']['seglist_basename']
+output_dir = os.path.join(lists_dir, output_basename)
+input_file = os.path.join(lists_dir, cfg['spectrum02']['path']['seglistlist_csv'])
 
 # 保存先ディレクトリの作成
 if not os.path.exists(output_dir):
@@ -21,7 +23,7 @@ with open(input_file, 'r') as f:
       ids = [id.strip() for id in clean_line.split(',')]
 
       # ファイル名は 3桁(001〜)で固定
-      file_name = f"seglist_indiv{count:03d}.csv"
+      file_name = f"{output_basename}-{count:03d}.csv"
       output_path = os.path.join(output_dir, file_name)
 
       with open(output_path, 'w') as f_out:

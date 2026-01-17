@@ -81,6 +81,7 @@
 			"SCORPEON",
 			"segdir",
 			"seglist",
+			"seglistlist",
 			"selfile",
 			"set_xlabel",
 			"setplot",

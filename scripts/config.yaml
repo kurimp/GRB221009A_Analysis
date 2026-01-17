@@ -29,10 +29,15 @@ spectrum:
     systematic : 0.01
     ignoreRange : "**-1.0 10.0-**"
   path:
-    seg_list: scripts/seg_list_all.txt
+    seg_list: lists/seg_list_all.txt
     base_dir: data/seg
     merge_output: results/spectrum/group_subset
     spectrums: box
     summary: results/spectrum
     merge_list: scripts/individual_csvs/seglist_indiv02.csv
     merge_name: seglist_indiv02
+spectrum02:
+  path:
+    list_dir: lists
+    seglistlist_csv: seglist_ext.csv
+    seglist_basename: seglist_indiv
