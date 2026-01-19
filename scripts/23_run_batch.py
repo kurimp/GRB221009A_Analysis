@@ -7,6 +7,9 @@ from scripts.utils.read_config import cfg as default_cfg
 # 設定ファイルのパス
 CONFIG_PATH = "scripts/config.yaml"
 
+#plotに用いるプログラム
+PlotPy = "21-1_spectrum_Fe.py"
+
 def run_batch(start=0, end=1000, cfg=default_cfg):
   with open(CONFIG_PATH, 'r') as f:
     original_cfg = f.read()
@@ -46,10 +49,10 @@ def run_batch(start=0, end=1000, cfg=default_cfg):
         continue
 
       # --- 21_spectrum.py の実行 ---
-      print(f"Running 21_spectrum.py for {seg_num}...")
-      res21 = subprocess.run([sys.executable, "scripts/21_spectrum.py"], capture_output=False)
+      print(f"Running {PlotPy} for {seg_num}...")
+      res21 = subprocess.run([sys.executable, f"scripts/{PlotPy}"], capture_output=False)
       if res21.returncode != 0:
-        print(f"❌ Error in 21_spectrum.py for {seg_num}.")
+        print(f"❌ Error in {PlotPy} for {seg_num}.")
       else:
         print(f"✅ Success: {target_name}")
 
@@ -60,5 +63,4 @@ def run_batch(start=0, end=1000, cfg=default_cfg):
       f.write(original_cfg)
 
 if __name__ == "__main__":
-  # 00から70まで実行
   run_batch(0, 100)

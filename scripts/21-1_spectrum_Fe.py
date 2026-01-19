@@ -25,85 +25,50 @@ def run_spectrum_analysis(cfg):
   ignoreRange = cfg['spectrum']['parameters']['ignoreRange']
 
   #特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
-  only_model = ["ZPL2"]
+  only_model = ["ZPL", "ZPL+Fe"]
 
   OUTPUT_DIR = f"results/spectrum/{file_name}"
 
   # 比較したいモデルのリスト
   # "モデル名": { "expr": "XSPECの式", "params": { パラメータ番号: "初期値設定文字列" } }
   MODELS = {
-    "PL": {
-      "expr": "tbabs * powerlaw",
-      "params": {
-        1: "0.5 0.1 0.0 0.0 100.0 100.0",   # nH
-        2: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma
-        3: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm
-      }
-    },
-    "CutoffPL": {
-      "expr": "tbabs * cutoffpl",
-      "params": {
-        1: "0.5 0.1 0.0 0.0 100.0 100.0",   # nH
-        2: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma
-        3: "1.0 1.0 0.1 0.1 500.0 500.0",  # HighECut (keV)
-        4: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm
-      }
-    },
     "ZPL": {
-      "expr": "ztbabs * powerlaw",
-      "params": {
-        1: "0.5 0.1 0.0 0.0 100.0 100.0",   # nH (ztbabsの1番目)
-        2: "0.151 -0.01 0.0 0.0 10.0 10.0",    # Redshift (ztbabsの2番目) ★追加
-        3: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma (powerlawの1番目 -> 全体で3番目)
-        4: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm (powerlawの2番目 -> 全体で4番目)
-      }
-    },
-    "ZCutoffPL": {
-      "expr": "ztbabs * cutoffpl",
-      "params": {
-        1: "0.5 0.1 0.0 0.0 100.0 100.0",   # nH
-        2: "0.151 -0.01 0.0 0.0 10.0 10.0",    # Redshift ★追加
-        3: "1.5 0.1 -2.0 -2.0 5.0 5.0",     # Gamma
-        4: "1.0 1.0 0.1 0.1 500.0 500.0",   # HighECut
-        5: "2.0 0.01 0.0 0.0 1e10 1e10"     # Norm
-      }
-    },
-    "ZPL2": {
       "expr": "tbabs * ztbabs * powerlaw",
-          "params": {
-            # 1: ztbabs (Galactic nH) -> 5.38e21 cm^-2 = 0.538
-            1: "0.538 -1 0.0 0.0 100.0 100.0",
-            # 2: ztbabs (Intrinsic nH) -> 1.29e22 cm^-2 = 1.29
-            2: "1.29",
-            # 3: ztbabs (Redshift)
-            3: "0.151 -1 0.0 0.0 10.0 10.0",
-            # 4: powerlaw (Photon Index) -> 自由
-            4: "1.8 0.1 -2.0 -2.0 5.0 5.0",
-            # 5: powerlaw (Norm) -> 自由
-            5: "1.0 0.01 0.0 0.0 1e10 1e10"
-          }
-    },
-    # Galactic nH (tbabs) * Intrinsic nH (ztbabs) * Cutoff Powerlaw
-    "ZCutoffPL2": {
-      "expr": "tbabs * ztbabs * cutoffpl",
       "params": {
-        # 1: tbabs (Galactic nH)
+        # 1: ztbabs (Galactic nH) -> 5.38e21 cm^-2 = 0.538
         1: "0.538 -1 0.0 0.0 100.0 100.0",
-        # 2: ztbabs (Intrinsic nH)
-        2: "1.29 -1 0.0 0.0 100.0 100.0",
+        # 2: ztbabs (Intrinsic nH) -> 1.29e22 cm^-2 = 1.29
+        2: "1.29",
         # 3: ztbabs (Redshift)
         3: "0.151 -1 0.0 0.0 10.0 10.0",
-        # 4: cutoffpl (Photon Index)
-        4: "1.5 0.1 -2.0 -2.0 5.0 5.0",
-        # 5: cutoffpl (HighECut keV) -> 自由
-        5: "1.0 1.0 0.1 0.1 500.0 500.0",
-        # 6: cutoffpl (Norm)
-        6: "2.0 0.01 0.0 0.0 1e10 1e10"
+        # 4: powerlaw (Photon Index) -> 自由
+        4: "1.8 0.1 -2.0 -2.0 5.0 5.0",
+        # 5: powerlaw (Norm) -> 自由
+        5: "1.0 0.01 0.0 0.0 1e10 1e10"
+      }
+    },
+    "ZPL+Fe": {
+      "expr": "tbabs * ztbabs * (powerlaw + gauss)",
+      "params": {
+        # 1: ztbabs (Galactic nH)
+        1: "0.538 -1",
+        # 2: ztbabs (Intrinsic nH)
+        2: "1.29",
+        # 3: ztbabs (Redshift)
+        3: "0.151 -1",
+        # 4: powerlaw (Photon Index)
+        4: "1.8 0.1 -2.0 -2.0 5.0 5.0",
+        # 5: powerlaw (Norm)
+        5: "1.0 0.1 0.0 0.0 1e10 1e10",
+        # 6: gauss (LineE)
+        6: "5.560 -1",
+        # 7: gauss (Sigma)
+        7: "1.0e-5 -1",
+        # 8: gauss (Norm)
+        8: "0 0.1 -1e10 -1e10 1e10 1e10"
       }
     }
   }
-
-  #======================
 
   os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -183,23 +148,16 @@ def run_spectrum_analysis(cfg):
     xspec.Fit.query = "yes"
     xspec.Fit.perform()
 
-    # --- 誤差計算の追加ここから ---
-    # 90% 信頼区間 (delta chi2 = 2.706) を計算
-    # ここでは例として Photon Index (4番) と Norm (5番) の誤差を計算
     print("\n--- Calculating Errors (90% confidence) ---")
     try:
-        # 自由なパラメータ（frozenでないもの）を自動で判別して計算する場合
-        # 今回の ZPL2 なら 4 と 5 を指定
-        xspec.Fit.error("2.706 1 2 3 4 5")
+      xspec.Fit.error("2.706 1 2 3 4 5")
     except Exception as e:
-        print(f"Error calculation failed: {e}")
+      print(f"Error calculation failed: {e}")
 
-    # 計算された誤差の取得例
     pho_index = m(4).values[0]
-    pho_err_low = m(4).error[0]  # 下限値
-    pho_err_high = m(4).error[1] # 上限値
+    pho_err_low = m(4).error[0]
+    pho_err_high = m(4).error[1]
     print(f"Photon Index: {pho_index:.4f} (-{pho_index-pho_err_low:.4f}, +{pho_err_high-pho_index:.4f})")
-    # --- 誤差計算の追加ここまで ---
 
     chi2 = xspec.Fit.statistic
     dof = xspec.Fit.dof
@@ -214,7 +172,7 @@ def run_spectrum_analysis(cfg):
 
     m_vals = xspec.Plot.model()
 
-    return m, chi2, red_chi2, m_vals
+    return m, chi2, dof, red_chi2, m_vals
 
   def treat_data(s):
     xspec.Plot.xAxis = "keV"
@@ -225,7 +183,6 @@ def run_spectrum_analysis(cfg):
       m_dummy.powerlaw.norm = 1.0
       xspec.Plot("eeufspec")
     elif not tf_eeufspec:
-      #xspec.Plot.area = True
       xspec.Plot("data")
 
     x_vals = xspec.Plot.x()
@@ -259,6 +216,8 @@ def run_spectrum_analysis(cfg):
     #ax1.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
     ax1.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
 
+    ftest_results = {}
+
     for i, (name, config) in enumerate(MODELS.items()):
       if only_model == None:
         pass
@@ -266,7 +225,7 @@ def run_spectrum_analysis(cfg):
         if name not in only_model:
           continue
 
-      m, chi2, red_chi2, m_vals = run_fit(config)
+      m, chi2, dof, red_chi2, m_vals = run_fit(config)
 
       print(f"[{name}] Red.Chi2: {red_chi2:.2f}")
 
@@ -324,8 +283,8 @@ def run_spectrum_analysis(cfg):
 
       param02_err = error_pm(param02_val, param.error[0], param.error[1])
 
-      param02_err_plus = param02_err[0]
-      param02_err_minus = param02_err[1]
+      param02_err_minus = param02_err[0]
+      param02_err_plus = param02_err[1]
 
       #Photon Index
       target_param_idx = 4
@@ -335,8 +294,8 @@ def run_spectrum_analysis(cfg):
 
       param04_err = error_pm(param04_val, param.error[0], param.error[1])
 
-      param04_err_plus = param04_err[0]
-      param04_err_minus = param04_err[1]
+      param04_err_minus = param04_err[0]
+      param04_err_plus = param04_err[1]
 
       stat_val = xspec.Fit.statistic
       dof_val = xspec.Fit.dof
@@ -356,6 +315,7 @@ def run_spectrum_analysis(cfg):
           header = [
             'Exec_Date',       # 実行日時
             'Group_Name',      # groupの名前
+            'Model',           # Model名
             'Exposure_s',      # Exposure
             'zTBabs_nH_val',
             'zTBabs_nH_err_minus',
@@ -373,6 +333,7 @@ def run_spectrum_analysis(cfg):
         writer.writerow([
           run_time,
           file_name,
+          name,
           exposure,
           f"{param02_val:.5f}",
           f"{param02_err_minus:.5f}",
@@ -387,6 +348,93 @@ def run_spectrum_analysis(cfg):
 
       print(f"  Saved Summary: {summary_csv_path}")
 
+      ftest_results[name] = {"chi2": chi2, "dof": dof}
+
+    #ftest
+    ftest_csv_path = os.path.join(summary_dir, 'ftest.csv')
+    file_exists = os.path.isfile(ftest_csv_path)
+
+    with open(ftest_csv_path, 'a', newline='') as f:
+      writer = csv.writer(f)
+
+      # ファイルが新規作成のときだけヘッダーを書く
+      if not file_exists:
+        header = ['Exec_Date','File',
+                  'base_name',
+                  'comp_name',
+                  'Chi2_base',
+                  'DOF_base',
+                  'Chi2_comp',
+                  'DOF_comp',
+                  'Delta_Chi2',
+                  'f_val',
+                  'p_val'
+        ]
+        writer.writerow(header)
+
+    for i, (name, config) in enumerate(MODELS.items()):
+      if i == 0:
+        base_name = name
+        chi2_base = ftest_results[base_name]["chi2"]
+        dof_base  = ftest_results[base_name]["dof"]
+
+      else:
+        comp_name = name
+        chi2_comp  = ftest_results[comp_name]["chi2"]
+        dof_comp   = ftest_results[comp_name]["dof"]
+
+        print("\n=== F-Test Results (Bevington Method) ===")
+
+        delta_chi2 = chi2_base - chi2_comp
+        delta_dof  = dof_base - dof_comp
+
+        if delta_dof <= 0:
+          print("Warning: DOF did not decrease. Check if parameters were correctly freed.")
+          f_value = 0
+          p_value = 1.0
+        elif delta_chi2 < 0:
+          print("Warning: Chi2 increased with added parameter. Fit might have failed.")
+          f_value = 0
+          p_value = 1.0
+        else:
+          # Bevington p.204 F_chi formula
+          # 分子: カイ二乗の改善量 / 自由度の差
+          numerator = delta_chi2 / delta_dof
+          # 分母: 新しいモデルの換算カイ二乗 (Chi2 / DOF)
+          denominator = chi2_comp / dof_comp
+
+          f_value = numerator / denominator
+
+          # F分布の生存関数 (Survival Function = 1 - CDF) から確率を計算
+          # これが「偶然にこれだけの改善が起きる確率」
+          p_value = xspec.Fit.ftest(chi2_comp, dof_comp, chi2_base, dof_base)
+
+          # 3. 結果の表示と保存
+          print(f"Model 1: {base_name}(Chi2={chi2_base:.2f}, DOF={dof_base})")
+          print(f"Model 2: {comp_name}(Chi2={chi2_comp:.2f}, DOF={dof_comp})")
+          print(f"{'-'*30}")
+          print(f"Delta Chi2 : {delta_chi2:.2f}")
+          print(f"Delta DOF  : {delta_dof}")
+          print(f"F-statistic: {f_value:.4f}")
+          print(f"Probability: {p_value:.3e}")
+          print(f"{'-'*30}")
+
+          with open(ftest_csv_path, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+              run_time,
+              file_name,
+              base_name,
+              comp_name,
+              f"{chi2_base:.2f}",
+              dof_base,
+              f"{chi2_comp:.2f}",
+              dof_comp,
+              f"{delta_chi2:.2f}",
+              f"{f_value:.2f}",
+              f"{p_value:.4f}"
+            ])
+
   fig.suptitle(f'GRB221009A NICER Spectrum Fit:{file_name}')
 
   ax1.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
@@ -394,6 +442,7 @@ def run_spectrum_analysis(cfg):
 
   ax1.set_xscale('log')
   ax1.set_yscale('log')
+  ax1.set_xlim(4, 8)
 
   if tf_eeufspec:
     ax1.set_ylabel(r'Energy Flux ($E^2 F_E$) [$\mathrm{erg \cdot cm^2\cdot s^{-1}}$]')
@@ -402,7 +451,6 @@ def run_spectrum_analysis(cfg):
 
   ax1.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
   ax1.grid(True, which="both", ls="--", alpha=0.3)
-  ax1.set_xlim(4, 8)
 
   ax2.axhline(0,color="black", linestyle='--', alpha=0.5)
   ax2.set_xscale('log')

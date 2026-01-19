@@ -34,10 +34,10 @@ spectrum:
     merge_output: results/spectrum/group_subset
     spectrums: box
     summary: results/spectrum
-    merge_list: scripts/individual_csvs/seglist_indiv02.csv
-    merge_name: seglist_indiv02
+    merge_list: lists/seglist_indiv/seglist_indiv-039.csv
+    merge_name: seglist_indiv-039
 spectrum02:
   path:
     list_dir: lists
-    seglistlist_csv: seglist_ext.csv
-    seglist_basename: seglist_group02
+    seglistlist_csv: seglist_indiv.csv
+    seglist_basename: seglist_indiv
