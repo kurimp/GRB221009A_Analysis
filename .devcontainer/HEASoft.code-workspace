@@ -117,7 +117,7 @@
 			"zbabs",
 			"ztbabs"
 		],
-		"vscode-pets.petSize": "small",
+		"vscode-pets.petSize": "nano",
 		"vscode-pets.theme": "winter",
 		"python.analysis.inlayHints.callArgumentNames": "all",
 		"python.analysis.inlayHints.functionReturnTypes": true,

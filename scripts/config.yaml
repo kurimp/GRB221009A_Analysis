@@ -39,5 +39,5 @@ spectrum:
 spectrum02:
   path:
     list_dir: lists
-    seglistlist_csv: seglist_indiv.csv
-    seglist_basename: seglist_indiv
+    seglistlist_csv: seglist_group02.csv
+    seglist_basename: seglist_group02

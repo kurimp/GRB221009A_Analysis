@@ -200,17 +200,20 @@ def run_spectrum_analysis(cfg):
 
     return x_vals, x_err, y_net, y_err, y_bkg, y_tot
 
+  #グラフエリアの作成
   fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
   plt.subplots_adjust(hspace=0.0)
 
+  #BackGroundの種類ごとに処理
   for bkgtype in ["3c50", "scorpion"]:
     if bkgtype=="scorpion":
       if tf_scorpion:
         pass
       else:
         continue
+    #load_dataでロードしたデータをtreat_dataに与えて各種データを取得
     x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(load_data(file_name, bkgtype))
-
+    #データのプロット
     ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
     ax1.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
     #ax1.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
@@ -218,6 +221,7 @@ def run_spectrum_analysis(cfg):
 
     ftest_results = {}
 
+    #modelでのfitを実行
     for i, (name, config) in enumerate(MODELS.items()):
       if only_model == None:
         pass
@@ -225,6 +229,7 @@ def run_spectrum_analysis(cfg):
         if name not in only_model:
           continue
 
+      #fitを実行
       m, chi2, dof, red_chi2, m_vals = run_fit(config)
 
       print(f"[{name}] Red.Chi2: {red_chi2:.2f}")
@@ -241,7 +246,6 @@ def run_spectrum_analysis(cfg):
 
       with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
-        # ヘッダーを分かりやすく記述（単位など）
         header = [
           'Energy_keV',       # x_vals
           'Energy_Error_keV', # x_err (ビン幅の半分)
@@ -350,7 +354,7 @@ def run_spectrum_analysis(cfg):
 
       ftest_results[name] = {"chi2": chi2, "dof": dof}
 
-    #ftest
+    #ftest_resultsに貯めたデータを用いてftest
     ftest_csv_path = os.path.join(summary_dir, 'ftest.csv')
     file_exists = os.path.isfile(ftest_csv_path)
 
@@ -359,7 +363,8 @@ def run_spectrum_analysis(cfg):
 
       # ファイルが新規作成のときだけヘッダーを書く
       if not file_exists:
-        header = ['Exec_Date','File',
+        header = ['Exec_Date',
+                  'File',
                   'base_name',
                   'comp_name',
                   'Chi2_base',
@@ -435,6 +440,7 @@ def run_spectrum_analysis(cfg):
               f"{p_value:.4f}"
             ])
 
+  #plotの整理
   fig.suptitle(f'GRB221009A NICER Spectrum Fit:{file_name}')
 
   ax1.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
