@@ -28,6 +28,8 @@ spectrum:
     grp_time: 40
     systematic : 0.01
     ignoreRange : "**-1.0 10.0-**"
+    is_mc: True
+    mc_time: 10000
   path:
     seg_list: lists/seg_list_all.txt
     base_dir: data/seg

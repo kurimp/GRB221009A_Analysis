@@ -35,7 +35,7 @@ blank_slide_layout = prs.slide_layouts[6]
 figure_left, figure_top = space_left, space_up
 
 #tableの設定
-rows, cols = 8, 3
+rows, cols = 9, 3
 table_left, table_top = figure_left + figure_width, space_up
 table_width, table_height = slide_width - (figure_left + space_right + figure_width), slide_height - (space_up + space_bottom)
 
@@ -72,8 +72,13 @@ for row in data.itertuples():
   table.cell(6, 2).text = f"{row.f_val}"
 
   table.cell(7, 0).merge(table.cell(7, 1))
-  table.cell(7, 0).text = "p_val"
-  table.cell(7, 2).text = f"{row.p_val}"
+  table.cell(7, 0).text = "p_val_ftest"
+  table.cell(7, 2).text = f"{row.p_val_ftest}"
+
+  table.cell(8, 0).merge(table.cell(8, 1))
+  table.cell(8, 0).text = "p_val_mc"
+  table.cell(8, 2).text = f"{row.p_val_mc}"
+
   for row in table.rows:
     row.height = Cm(1.0)
     row.width = Cm(3.0)
