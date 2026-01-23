@@ -1,6 +1,6 @@
 general:
   parameters:
-    trigger_time: 59861.55347211 #MJD
+    trigger_time: 59861.55347211
     ra: 288.2643
     dec: 19.7712
 segment:
@@ -12,7 +12,7 @@ segment:
   path:
     result_root: results/lightcurve/segments
     obs_list_name: segInfo_fixed02.csv
-    result_time_dir : time_fixed02
+    result_time_dir: time_fixed02
     collect_dir: seg02
 lightcurve:
   parameters:
@@ -26,20 +26,24 @@ lightcurve:
 spectrum:
   parameters:
     grp_time: 40
-    systematic : 0.01
-    ignoreRange : "**-1.0 10.0-**"
+    systematic: 0.01
+    ignoreRange: '**-1.0 10.0-**'
     is_mc: True
-    mc_time: 10000
+    mc_time: 1000
+    only_model:
+    - ZPL
+    - ZPL+Fe
   path:
     seg_list: lists/seg_list_all.txt
     base_dir: data/seg
     merge_output: results/spectrum/group_subset
     spectrums: box
     summary: results/spectrum
-    merge_list: lists/seglist_indiv/seglist_indiv-039.csv
-    merge_name: seglist_indiv-039
+    merge_list: lists/seglist_indiv/seglist_indiv-007.csv
+    merge_name: seglist_indiv-007
 spectrum02:
   path:
     list_dir: lists
     seglistlist_csv: seglist_group02.csv
     seglist_basename: seglist_group02
+    seglist_blacklist: seglist_indiv_bl.csvaaaa

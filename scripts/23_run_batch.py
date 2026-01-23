@@ -2,6 +2,7 @@ import yaml
 import subprocess
 import os
 import sys
+import csv
 from scripts.utils.read_config import cfg as default_cfg
 
 # 設定ファイルのパス
@@ -9,6 +10,9 @@ CONFIG_PATH = "scripts/config.yaml"
 
 #plotに用いるプログラム
 PlotPy = "21-1_spectrum_Fe.py"
+
+#ブラックリストのパス
+bl_file = default_cfg['spectrum02']['path']['seglist_blacklist']
 
 def run_batch(start=0, end=1000, cfg=default_cfg):
   with open(CONFIG_PATH, 'r') as f:
@@ -18,10 +22,28 @@ def run_batch(start=0, end=1000, cfg=default_cfg):
     lists_dir = cfg['spectrum02']['path']['list_dir']
     target_basename = cfg['spectrum02']['path']['seglist_basename']
     target_dir = os.path.join(lists_dir, target_basename)
+
+    skip_names = set()
+    blacklist_path = os.path.join(lists_dir, bl_file)
+
+    if os.path.exists(blacklist_path):
+      print(f"ℹ️ Loading blacklist from: {blacklist_path}")
+      with open(blacklist_path, 'r', encoding='utf-8-sig') as f:
+        reader = csv.reader(f)
+        for row in reader:
+          if row:
+            skip_names.add(row[0].strip())
+    else:
+      print(f"⚠️ Blacklist file not found at: {blacklist_path}. Proceeding without skip.")
+
     for i in range(start, end + 1):
       seg_num = f"{i:03d}"
       target_name = f"{target_basename}-{seg_num}"
       target_list = f"{target_name}.csv"
+
+      if target_name in skip_names:
+        print(f"🚫 Skipping {target_name}: Found in blacklist.")
+        continue
 
       print(f"\n{'='*40}")
       print(f"Processing: {target_name} ({i}/{end})")

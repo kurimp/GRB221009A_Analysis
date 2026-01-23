@@ -11,6 +11,8 @@ import datetime
 import scipy.stats
 import numpy as np
 import shutil
+from tqdm import tqdm
+import subprocess
 
 def run_spectrum_analysis(cfg):
   #===========config===========
@@ -32,7 +34,9 @@ def run_spectrum_analysis(cfg):
   ignoreRange = cfg['spectrum']['parameters']['ignoreRange']
 
   #特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
-  only_model = ["ZPL", "ZPL+Fe"]
+  only_model = cfg['spectrum']['parameters']['only_model']
+
+  grp_time = cfg['spectrum']['parameters']['grp_time']
 
   OUTPUT_DIR = f"results/spectrum/{file_name}"
 
@@ -83,6 +87,9 @@ def run_spectrum_analysis(cfg):
     if type(only_model) is not list:
       print(f"ERROR: 'only_model' must be a list of model names or None. Found type: {type(only_model).__name__}")
       sys.exit(1)
+    for model_name in list(MODELS.keys()):
+      if model_name not in only_model:
+        del MODELS[model_name]
     for model_name in only_model:
       if model_name not in MODELS.keys():
         print(f"WARNING: Model '{model_name}' specified in 'only_model' is not defined in MODELS.")
@@ -118,7 +125,7 @@ def run_spectrum_analysis(cfg):
         return None
 
       s = xspec.Spectrum(data_filename)
-
+      print(f"Original Bins: {len(xspec.AllData(1).values)}")
       s.background = bkg_filename
 
       if s.response is None or s.response.rmf == "":
@@ -164,13 +171,15 @@ def run_spectrum_analysis(cfg):
 
     print("\n--- Calculating Errors (90% confidence) ---")
     try:
+      free_params = [i for i in range(1, m.nParameters+1) if not m(i).frozen]
+      xspec.Fit.error("2.706 " + " ".join(map(str, free_params)))
       xspec.Fit.error("2.706 1 2 3 4 5")
     except Exception as e:
       print(f"Error calculation failed: {e}")
 
-    pho_index = m(4).values[0]
-    pho_err_low = m(4).error[0]
-    pho_err_high = m(4).error[1]
+    pho_index = m.powerlaw.PhoIndex.values[0]
+    pho_err_low = m.powerlaw.PhoIndex.error[0]
+    pho_err_high = m.powerlaw.PhoIndex.error[1]
     print(f"Photon Index: {pho_index:.4f} (-{pho_index-pho_err_low:.4f}, +{pho_err_high-pho_index:.4f})")
 
     chi2 = xspec.Fit.statistic
@@ -178,6 +187,7 @@ def run_spectrum_analysis(cfg):
     red_chi2 = chi2 / dof if dof > 0 else 0
 
     xspec.Plot.xAxis = "keV"
+    xspec.Plot.add = True
     if tf_eeufspec:
       xspec.Plot("eeufspec")
     elif not tf_eeufspec:
@@ -297,23 +307,54 @@ def run_spectrum_analysis(cfg):
     for i in range(1, m_base.nParameters + 1):
       best_params.append(m_base(i).values)
 
-    fake_file_name = "fake_spec.pha"
+    fake_name = "temp_sim"
 
     success_count = 0
-    for i in range(n_sim):
-      if (i + 1) % 10 == 0:
-        sys.stdout.write(f"\rSimulation: {i+1}/{n_sim}")
-        sys.stdout.flush()
+    for i in tqdm(range(n_sim)):
 
       try:
+        xspec.AllData.clear()
         xspec.AllModels.clear()
         m_temp = setup_model(base_config)
 
         for idx, values in enumerate(best_params):
           m_temp(idx + 1).values = values
 
-        fs = xspec.FakeitSettings(response=rmf, arf=arf, background=bkg, exposure=exposure, correction=1.0, fileName="temp_sim.fak")
+        fs = xspec.FakeitSettings(response=rmf, arf=arf, background=bkg, exposure=exposure, correction=1.0, fileName=fake_name+".fak")
         xspec.AllData.fakeit(1, fs, applyStats=True, filePrefix="")
+
+        # --- 4. grppha の実行 ---
+        out_grp_name = f"{fake_name}_grp.pha"
+        out_grp_path = os.path.join(file_path, out_grp_name)
+
+        if os.path.exists(out_grp_path):
+          os.remove(out_grp_path)
+
+        grppha_input = (
+          f"chkey BACKFILE {fake_name}_bkg.fak\n"
+          f"chkey RESPFILE {rmf}\n"
+          f"group min {grp_time}\n"
+          f"exit\n"
+        )
+
+        try:
+          subprocess.run(
+            ["grppha", f"infile={fake_name}.fak", f"outfile={out_grp_name}", "clobber=yes"],
+            input=grppha_input,
+            text=True,
+            check=True,
+            stdout=subprocess.DEVNULL
+          )
+
+        except subprocess.CalledProcessError:
+          print("❌ grppha failed.")
+          sys.exit(1)
+
+        xspec.AllData.clear()
+        xspec.AllData(f"1:1 {out_grp_name}")
+        s = xspec.AllData(1)
+
+        xspec.AllData(1).ignore(ignoreRange)
 
         #baseでのfit
         m_base = setup_model(base_config)
@@ -325,9 +366,8 @@ def run_spectrum_analysis(cfg):
         xspec.Plot.xAxis = "keV"
         xspec.Plot("data")
 
-        if len(sim_spectra_x) == 0:
-          sim_spectra_x = xspec.Plot.x()
-
+        # 【修正点1】X軸もY軸も毎回保存する（ビン数が変わるため）
+        sim_spectra_x.append(xspec.Plot.x())
         sim_spectra_y.append(xspec.Plot.y())
 
         #compでのfit
@@ -381,51 +421,50 @@ def run_spectrum_analysis(cfg):
       X_flat = []
       Y_flat = []
 
-      x_base = np.array(sim_spectra_x)
-
-      for y_vals in sim_spectra_y:
+      # 【修正点2】保存したリストをzipで回して、個別にペアにする
+      for x_vals, y_vals in zip(sim_spectra_x, sim_spectra_y):
+        x_arr = np.array(x_vals)
         y_arr = np.array(y_vals)
 
-        mask = (y_arr > 0) & (x_base > 0)
-        X_flat.extend(x_base[mask])
-        Y_flat.extend(y_arr[mask])
+        # 同じ回のデータなら長さは必ず一致する
+        if len(x_arr) == len(y_arr):
+          mask = (y_arr > 0) & (x_arr > 0)
+          X_flat.extend(x_arr[mask])
+          Y_flat.extend(y_arr[mask])
 
-      x_min, x_max = min(X_flat), max(X_flat)
-      y_min, y_max = min(Y_flat), max(Y_flat)
+      if len(X_flat) > 0:
+        x_min, x_max = min(X_flat), max(X_flat)
+        y_min, y_max = min(Y_flat), max(Y_flat)
 
-      xbins = np.logspace(np.log10(x_min), np.log10(x_max), 100)
-      ybins = np.logspace(np.log10(y_min), np.log10(y_max), 100)
+        xbins = np.logspace(np.log10(x_min), np.log10(x_max), 100)
+        ybins = np.logspace(np.log10(y_min), np.log10(y_max), 100)
 
-      h = plt.hist2d(X_flat, Y_flat, bins=[xbins, ybins], cmap='inferno', norm=LogNorm())
+        h = plt.hist2d(X_flat, Y_flat, bins=[xbins, ybins], cmap='inferno', norm=LogNorm())
 
-      plt.colorbar(h[3], label='Frequency of Simulated Data points')
-
-      try:
-        xspec.Plot.xAxis = "keV"
-        pass
-      except:
-        pass
+        plt.colorbar(h[3], label='Frequency of Simulated Data points')
+      else:
+        print("Warning: No valid spectral data for heatmap.")
 
       plt.xscale('log')
       plt.yscale('log')
       plt.xlabel('Energy (keV)')
       plt.ylabel('Counts s$^{-1}$ keV$^{-1}$')
-      plt.title(f'Simulated Spectra Distribution (Null Hypothesis, N={success_count})')
+      plt.title(fr'Simulated Spectra Distribution:{file_name} ($N={success_count}$)')
       plt.grid(True, which="both", ls="--", alpha=0.3)
       plt.xlim(4, 8) # 必要に応じて範囲指定
 
-      spec_plot_path = os.path.join(mc_output_dir, f"mc_spectra_density_{n_sim}.png")
+      spec_plot_path = os.path.join(mc_output_dir, f"{file_name}_mc_spectra_density_{n_sim}.png")
       plt.savefig(spec_plot_path)
       plt.close()
       print(f"  Saved Spectral Density Plot: {spec_plot_path}")
 
     #生データをCSVに保存
-    mc_csv_path = os.path.join(mc_output_dir, f"mc_{n_sim}.csv")
+    mc_csv_path = os.path.join(mc_output_dir, f"{file_name}_mc_{n_sim}.csv")
     np.savetxt(mc_csv_path, np.column_stack([sim_delta_chi2_array, sim_f_array]), delimiter=",", header="Simulated_Delta_Chi2,Simulated_F_Values", comments="")
     print(f"  Saved MC Data: {mc_csv_path}")
 
     # 2. ヒストグラムの作成と保存
-    fig_hist, (ax1_hist, ax2_hist) = plt.subplots(2, 1, figsize=(10, 6))
+    fig_hist, (ax1_hist, ax2_hist) = plt.subplots(2, 1, figsize=(10, 6), constrained_layout=True)
 
     # ヒストグラムの描画
     # Delta Chi2用のビン
@@ -442,7 +481,7 @@ def run_spectrum_analysis(cfg):
     ax2_hist.hist(sim_f_array, bins=bins_f, color='skyblue', edgecolor='black', alpha=0.7, label='Simulated Null Distribution')
     ax2_hist.axvline(real_f_val, color='red', linestyle='dashed', linewidth=2, label=rf'Observed $F$ ({real_f_val:.2f})')
 
-    fig_hist.suptitle(f'Monte Carlo Simulation (N={success_count})\n$p_{{mc}} = {p_val_mc:.4f}$')
+    fig_hist.suptitle(f'Monte Carlo Simulation:{file_name} (N={success_count})\n$p_{{mc}} = {p_val_mc:.4f}$')
 
     ax1_hist.set_xlabel(r'$\Delta \chi^2$ (Base - Comp)')
     ax1_hist.set_ylabel('Frequency')
@@ -456,7 +495,7 @@ def run_spectrum_analysis(cfg):
     ax2_hist.set_xlim(0, None)
     ax2_hist.grid(True, alpha=0.3)
 
-    mc_plot_path = os.path.join(mc_output_dir, f"mc_hist_{n_sim}.png")
+    mc_plot_path = os.path.join(mc_output_dir, f"{file_name}_mc_hist_{n_sim}.png")
     fig_hist.savefig(mc_plot_path)
 
     print(f"  Saved MC Plot: {mc_plot_path}")
@@ -465,7 +504,7 @@ def run_spectrum_analysis(cfg):
 
 
   #グラフエリアの作成
-  fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
+  fig_spec, (ax1_spec, ax2_spec) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
   plt.subplots_adjust(hspace=0.0)
 
   #BackGroundの種類ごとに処理
@@ -482,14 +521,14 @@ def run_spectrum_analysis(cfg):
     x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(s)
 
     #データのプロット
-    ax1.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
-    ax1.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
-    #ax1.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
-    ax1.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
+    ax1_spec.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
+    ax1_spec.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
+    #ax1_spec.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
+    ax1_spec.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
 
     ftest_results = {}
 
-    colors = ["C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9"]
+    colors = ["C3", "C4", "C5", "C6", "C7", "C8", "C9"]
     #modelでのfitを実行
     for i, (name, config) in enumerate(MODELS.items()):
       if only_model == None:
@@ -505,10 +544,11 @@ def run_spectrum_analysis(cfg):
       print(f"[{name}] Red.Chi2: {red_chi2:.2f}")
 
       if max(m_vals) > 0:
-        ax1.plot(x_vals, m_vals, label=f'{name}({bkgtype})($\chi^2_\\nu$={red_chi2:.2f})', linewidth=2, color=colors[i])
+        ax1_spec.step(x_vals, m_vals, label=f'{name}({bkgtype})($\chi^2_\\nu$={red_chi2:.2f})', linewidth=2, color=colors[i])
 
       residuals = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y_net, m_vals, y_err)]
-      ax2.errorbar(x_vals, residuals, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})", color=colors[i])
+      ax2_spec.errorbar(x_vals, residuals, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})", color=colors[i])
+
 
       csv_path = os.path.join(OUTPUT_DIR, f'{file_name}_{bkgtype}_{name}.csv')
 
@@ -682,10 +722,6 @@ def run_spectrum_analysis(cfg):
           f_value = numerator / denominator
           p_value = xspec.Fit.ftest(chi2_comp, dof_comp, chi2_base, dof_base)
 
-          # F分布の生存関数 (Survival Function = 1 - CDF) から確率を計算
-          # これが「偶然にこれだけの改善が起きる確率」
-          p_value = xspec.Fit.ftest(chi2_comp, dof_comp, chi2_base, dof_base)
-
           # 3. 結果の表示と保存
           print(f"Model 1: {base_name}(Chi2={chi2_base:.2f}, DOF={dof_base})")
           print(f"Model 2: {comp_name}(Chi2={chi2_comp:.2f}, DOF={dof_comp})")
@@ -708,7 +744,7 @@ def run_spectrum_analysis(cfg):
             if os.path.exists("temp_sim.fak"):
               os.remove("temp_sim.fak")
             if os.path.exists("temp_sim_bkg.fak"):
-              os.remove("temp_sim.fak")
+              os.remove("temp_sim_bkg.fak")
 
           print(f"{'-'*30}")
 
@@ -730,30 +766,31 @@ def run_spectrum_analysis(cfg):
             ])
 
   #plotの整理
-  fig.suptitle(f'GRB221009A NICER Spectrum Fit:{file_name}')
+  fig_spec.suptitle(f'Spectrum:{file_name}')
 
-  ax1.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
-  ax2.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
+  ax1_spec.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
+  ax2_spec.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
 
-  ax1.set_xscale('log')
-  ax1.set_yscale('log')
-  ax1.set_xlim(4, 8)
+
+  ax1_spec.set_xscale('log')
+  ax1_spec.set_yscale('log')
+  ax1_spec.set_xlim(1, 10)
 
   if tf_eeufspec:
-    ax1.set_ylabel(r'Energy Flux ($E^2 F_E$) [$\mathrm{erg \cdot cm^2\cdot s^{-1}}$]')
+    ax1_spec.set_ylabel(r'Energy Flux ($E^2 F_E$) [$\mathrm{erg \cdot cm^2\cdot s^{-1}}$]')
   elif not tf_eeufspec:
-    ax1.set_ylabel(r'Counts s$^{-1}$ keV$^{-1}$')
+    ax1_spec.set_ylabel(r'Counts s$^{-1}$ keV$^{-1}$')
 
-  ax1.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
-  ax1.grid(True, which="both", ls="--", alpha=0.3)
+  ax1_spec.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
+  ax1_spec.grid(True, which="both", ls="--", alpha=0.3)
 
-  ax2.axhline(0,color="black", linestyle='--', alpha=0.5)
-  ax2.set_xscale('log')
-  ax2.set_ylabel('(Data-Model)/Error')
-  ax2.set_xlabel('Energy (keV)')
-  ax2.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
-  ax2.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
-  ax2.grid(True, which="both", ls=":", alpha=0.5)
+  ax2_spec.axhline(0,color="black", linestyle='--', alpha=0.5)
+  ax2_spec.set_xscale('log')
+  ax2_spec.set_ylabel('(Data-Model)/Error')
+  ax2_spec.set_xlabel('Energy (keV)')
+  ax2_spec.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
+  ax2_spec.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
+  ax2_spec.grid(True, which="both", ls=":", alpha=0.5)
 
   option_figure_name=[]
 
@@ -773,7 +810,7 @@ def run_spectrum_analysis(cfg):
 
   figure_path = os.path.join(OUTPUT_DIR, figure_name)
 
-  fig.savefig(figure_path)
+  fig_spec.savefig(figure_path)
   print(f"\nグラフを '{figure_path}' に保存しました。")
 
 if __name__ == "__main__":
