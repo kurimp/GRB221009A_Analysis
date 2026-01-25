@@ -13,6 +13,9 @@ import numpy as np
 import shutil
 from tqdm import tqdm
 import subprocess
+import pandas as pd
+import glob
+import re
 
 def run_spectrum_analysis(cfg):
   #===========config===========
@@ -26,9 +29,12 @@ def run_spectrum_analysis(cfg):
   #scorpionでのbackgroundを扱うかどうかを選択。使うならTrue。
   tf_scorpion = False
 
-  #モンテカルロシミュレーションの実行の可否
+  #モンテカルロシミュレーションの実行の如何
   is_mc = cfg['spectrum']['parameters']['is_mc']
   n_mc = cfg['spectrum']['parameters']['mc_time']
+
+  #検出限界検定の実行の如何
+  is_limit = cfg['spectrum']['parameters']['is_limit']
 
   systematic = cfg['spectrum']['parameters']['systematic']
   ignoreRange = cfg['spectrum']['parameters']['ignoreRange']
@@ -502,6 +508,236 @@ def run_spectrum_analysis(cfg):
 
     return p_val_mc
 
+  def check_detection_limit(cfg, target_norm_list, base_config, comp_config, spectrum_obj, n_sim=100):
+    """
+    指定したNormのリストに対して、どれくらいの確率で検出できるか（感度）を調べる
+    """
+    print(f"\n=== Starting Detection Limit Check (Sensitivity Analysis) ===")
+
+    # --- Step 0: 準備 (File Link & Path) ---
+    # fakeit用にRMF/ARF/BKGへのパスを解決・リンク作成 (run_monte_carloと同じロジック)
+    current_dir = os.getcwd()
+    temp_dir = os.path.join(OUTPUT_DIR, "limit_temp")
+    os.makedirs(temp_dir, exist_ok=True)
+
+    data_dir = os.path.abspath(file_path) # 元データの場所
+    os.chdir(temp_dir) # 作業ディレクトリへ移動
+
+    try:
+      # パス解決
+      rmf_name = spectrum_obj.response.rmf
+      rmf = rmf_name if os.path.isabs(rmf_name) else os.path.join(data_dir, rmf_name)
+
+      bkg_name = spectrum_obj.background.fileName
+      bkg = bkg_name if os.path.isabs(bkg_name) else os.path.join(data_dir, bkg_name)
+
+      try:
+        arf_name = spectrum_obj.response.arf
+        arf = arf_name if os.path.isabs(arf_name) else os.path.join(data_dir, arf_name)
+      except:
+        arf = ""
+
+      exposure = spectrum_obj.exposure
+
+      # ローカルリンク作成関数
+      def make_local_link(abs_path):
+        if not abs_path: return ""
+        filename = os.path.basename(abs_path)
+        if not os.path.exists(filename):
+          try:
+            os.symlink(abs_path, filename)
+          except:
+            shutil.copy(abs_path, filename)
+        return filename
+
+      rmf = make_local_link(rmf)
+      bkg = make_local_link(bkg)
+      arf = make_local_link(arf)
+
+    except Exception as e:
+      print(f"Limit Check Error: Could not get response info. {e}")
+      os.chdir(current_dir)
+      return
+
+    # --- Step 1: 閾値の決定 (Null Simulation結果の読み込み) ---
+    mc_output_dir = os.path.join(OUTPUT_DIR, "mc_results")
+    list_candidate_file  = sorted(glob.glob(os.path.join(mc_output_dir, "seglist_*_mc_*.csv"))) # ※ファイル名のパターンは環境に合わせて調整してください
+
+    # もし seglist_ がファイル名に含まれていない場合は以下のように修正
+    if not list_candidate_file:
+      list_candidate_file = sorted(glob.glob(os.path.join(mc_output_dir, f"{file_name}_mc_*.csv")))
+
+    if list_candidate_file:
+      latest_file = max(
+        list_candidate_file,
+        key=lambda f: int(re.search(r'mc_([0-9]+)', os.path.basename(f)).group(1)) if re.search(r'mc_([0-9]+)', os.path.basename(f)) else 0
+      )
+      print(f"Using Null MC Result: {os.path.basename(latest_file)}")
+      mc_data = pd.read_csv(latest_file)
+
+      null_delta_chi2 = np.array(mc_data['Simulated_Delta_Chi2'])
+      # 95% 有意水準 (上位5%) を閾値とする
+      threshold_chi2 = np.percentile(null_delta_chi2, 95)
+      print(f"Detection Threshold (95%): Delta Chi2 > {threshold_chi2:.2f}")
+    else:
+      print("Warning: No MC result file found. Using theoretical threshold approx 4.61 (90%) or 9.21 (99%).")
+      threshold_chi2 = 9.21 # Default fallback
+
+    # ベースライン（連続成分）のパラメータを決定するために一度Fit
+    xspec.AllData.clear()
+    xspec.AllData(f"1:1 {os.path.join(data_dir, file_name)}_grp.pha") # 元データ読み込み
+    xspec.AllData(1).ignore(ignoreRange)
+    m_base_real = setup_model(base_config)
+    xspec.Fit.perform()
+
+    # 連続成分のベストフィット値を保存（シミュレーションの土台にする）
+    best_continuum_params = []
+    for i in range(1, m_base_real.nParameters + 1):
+      best_continuum_params.append(m_base_real(i).values)
+
+
+    # --- Step 2: 各Normでの検出率調査 (Signal Simulation) ---
+    results_norm = []
+    results_prob = []
+
+    # XSPECの出力を抑制
+    old_chatter = xspec.Xset.chatter
+    xspec.Xset.chatter = 0
+
+    fake_name = "temp_limit_sim"
+
+    print("\nStarting Signal Injection Loop...")
+
+    for test_norm in target_norm_list:
+      pass_count = 0
+
+      # tqdmで進捗表示
+      for i in tqdm(range(n_sim), desc=f"Norm={test_norm:.1e}", leave=False):
+        try:
+          xspec.AllData.clear()
+          xspec.AllModels.clear()
+
+          # 1. 信号入りモデルの作成 (Injection)
+          m_inj = setup_model(comp_config)
+
+          # 連続成分を実データのベストフィットに合わせる
+          # ※パラメータ番号のマッピングがBaseとCompでズレない前提（ZPL+Feなら通常OK）
+          #   もしズレるなら辞書で管理する必要がありますが、ここでは簡易的に順序で適用
+          param_idx = 1
+          for val_str in best_continuum_params:
+            # Compモデルのパラメータ数がBaseより多いので、Baseの分だけ埋める
+            if param_idx <= len(best_continuum_params):
+                m_inj(param_idx).values = val_str
+            param_idx += 1
+
+          # ★重要★: 鉄輝線のNormをテストしたい値に「固定」する
+          # MODELS["ZPL+Fe"]のパラメータ定義で、Gauss Normが何番か確認が必要
+          # 定義順: tbabs(1)*ztbabs(2-3)*(pow(4-5)+gauss(6-8)) -> Normは8番
+          gauss_norm_idx = 8
+          m_inj(gauss_norm_idx).values = test_norm
+          m_inj(gauss_norm_idx).frozen = True # 固定してFakeit
+
+          # 2. Fakeit (スペクトル生成)
+          fs = xspec.FakeitSettings(response=rmf, arf=arf, background=bkg, exposure=exposure, correction=1.0, fileName=fake_name+".fak")
+          xspec.AllData.fakeit(1, fs, applyStats=True, filePrefix="")
+
+          # 3. grppha (グルーピング)
+          out_grp_name = f"{fake_name}_grp.pha"
+          if os.path.exists(out_grp_name): os.remove(out_grp_name)
+
+          grppha_input = f"chkey BACKFILE {fake_name}_bkg.fak\nchkey RESPFILE {rmf}\ngroup min {grp_time}\nexit\n"
+          subprocess.run(["grppha", f"infile={fake_name}.fak", f"outfile={out_grp_name}", "clobber=yes"],
+                        input=grppha_input, text=True, stdout=subprocess.DEVNULL, check=True)
+
+          # 4. Fit & Recovery Check
+          xspec.AllData.clear()
+          xspec.AllData(f"1:1 {out_grp_name}")
+          xspec.AllData(1).ignore(ignoreRange)
+
+          # A. Base Model (Line無し) Fit
+          m_base = setup_model(base_config)
+          xspec.Fit.renorm()
+          xspec.Fit.perform()
+          chi2_base = xspec.Fit.statistic
+
+          # B. Comp Model (Line有り) Fit
+          m_comp = setup_model(comp_config)
+          # ここではNormをFreeにして「見つかるか」を試す
+          m_comp(gauss_norm_idx).values = f"{test_norm} 0.01" # 初期値を与えてFreeに
+          m_comp(gauss_norm_idx).frozen = False
+
+          xspec.Fit.renorm()
+          xspec.Fit.perform()
+          chi2_comp = xspec.Fit.statistic
+
+          # 5. 判定
+          d_chi2 = chi2_base - chi2_comp
+          if d_chi2 > threshold_chi2:
+            pass_count += 1
+
+        except Exception as e:
+          continue
+
+      detection_prob = pass_count / n_sim
+      results_norm.append(test_norm)
+      results_prob.append(detection_prob)
+
+      print(f"  Norm: {test_norm:.2e} -> Prob: {detection_prob*100:.1f}%")
+
+      # 検出率が100%に達して安定したらループを抜ける（時短）
+      if len(results_prob) > 3 and all(p >= 0.99 for p in results_prob[-3:]):
+          print("  Reached 100% detection. Stopping loop.")
+          break
+
+    # 設定を戻す
+    xspec.Xset.chatter = old_chatter
+    os.chdir(current_dir) # 元のディレクトリに戻る
+
+    # --- Step 3: 結果の保存とプロット ---
+
+    # CSV保存
+    limit_dir = os.path.join(OUTPUT_DIR, "limit_results")
+    os.makedirs(limit_dir, exist_ok=True)
+
+    df_res = pd.DataFrame({"Norm": results_norm, "Probability": results_prob})
+    csv_save_path = os.path.join(limit_dir, f"{file_name}_sensitivity.csv")
+    df_res.to_csv(csv_save_path, index=False)
+    print(f"\nSaved Sensitivity Data: {csv_save_path}")
+
+    # プロット作成
+    plt.figure(figsize=(8, 6))
+    plt.plot(results_norm, results_prob, 'o-', color='navy', label='Detection Probability')
+    plt.axhline(0.9, color='red', linestyle='--', label='90% Confidence')
+
+    plt.xscale('log')
+    plt.xlabel('Injected Fe Line Norm')
+    plt.ylabel('Detection Probability')
+    plt.title(f'Sensitivity Curve: {file_name}\n(Threshold $\Delta\chi^2$ > {threshold_chi2:.2f})')
+    plt.grid(True, which="both", ls="--", alpha=0.3)
+    plt.legend()
+
+    plot_save_path = os.path.join(limit_dir, f"{file_name}_sensitivity_curve.png")
+    plt.savefig(plot_save_path)
+    plt.close()
+    print(f"Saved Sensitivity Plot: {plot_save_path}")
+
+    return results_norm, results_prob
+
+  def generate_custom_norms():
+    # 基準となる数字
+    bases = [1, 2, 5, 7]
+    # 10のマイナス6乗から10の3乗（1000）まで
+    exponents = range(-6, 4)
+
+    norm_list = []
+    for e in exponents:
+        for b in bases:
+            val = b * (10 ** e)
+            if val <= 1000:
+                norm_list.append(val)
+
+    # 重複を削除してソート（念のため）
+    return sorted(list(set(norm_list)))
 
   #グラフエリアの作成
   fig_spec, (ax1_spec, ax2_spec) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
@@ -529,7 +765,7 @@ def run_spectrum_analysis(cfg):
     ftest_results = {}
 
     colors = ["C3", "C4", "C5", "C6", "C7", "C8", "C9"]
-    #modelでのfitを実行
+
     for i, (name, config) in enumerate(MODELS.items()):
       if only_model == None:
         pass
@@ -745,6 +981,16 @@ def run_spectrum_analysis(cfg):
               os.remove("temp_sim.fak")
             if os.path.exists("temp_sim_bkg.fak"):
               os.remove("temp_sim_bkg.fak")
+          if is_limit:
+            target_norm_list = generate_custom_norms()
+            check_detection_limit(
+                config,
+                target_norm_list,
+                MODELS[base_name],  # Base Model Config
+                MODELS[comp_name],  # Comp Model Config
+                s,                  # Spectrum Object
+                n_sim=10           # 試行回数 (例: 100回)
+            )
 
           print(f"{'-'*30}")
 

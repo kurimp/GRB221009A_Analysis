@@ -28,8 +28,9 @@ spectrum:
     grp_time: 40
     systematic: 0.01
     ignoreRange: '**-1.0 10.0-**'
-    is_mc: True
-    mc_time: 1000
+    is_mc: False
+    is_limit : True
+    mc_time: 10000
     only_model:
     - ZPL
     - ZPL+Fe
@@ -44,6 +45,6 @@ spectrum:
 spectrum02:
   path:
     list_dir: lists
-    seglistlist_csv: seglist_group02.csv
-    seglist_basename: seglist_group02
+    seglistlist_csv: seglist_indiv.csv
+    seglist_basename: seglist_indiv
     seglist_blacklist: seglist_indiv_bl.csvaaaa
