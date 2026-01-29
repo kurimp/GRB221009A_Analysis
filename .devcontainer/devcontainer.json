@@ -57,7 +57,8 @@
         "pkief.material-icon-theme",
         "tonybaloney.vscode-pets",
         "timonwong.shellcheck",
-        "foxundermoon.shell-format"
+        "foxundermoon.shell-format",
+        "yuichkun.reference-graph"
       ]
     }
   },

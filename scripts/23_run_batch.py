@@ -78,6 +78,14 @@ def run_batch(start=0, end=1000, cfg=default_cfg):
       else:
         print(f"✅ Success: {target_name}")
 
+      # --- 2_spectrum.py の実行 ---
+      print(f"Running {PlotPy} for {seg_num}...")
+      res21 = subprocess.run([sys.executable, f"scripts/{PlotPy}"], capture_output=False)
+      if res21.returncode != 0:
+        print(f"❌ Error in {PlotPy} for {seg_num}.")
+      else:
+        print(f"✅ Success: {target_name}")
+
   finally:
     # 処理終了後（またはエラー時）に元のconfigに戻す
     print("\nRestoring original config.yaml...")

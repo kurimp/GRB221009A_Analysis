@@ -31,18 +31,25 @@ prs.slide_height = slide_height
 
 blank_slide_layout = prs.slide_layouts[6]
 
-#figureの設定
-figure_left, figure_top = space_left, space_up
+#figure1の設定
+figure1_left, figure1_top = space_left, space_up
+figure1_hight = (slide_height-(space_up+space_bottom))/2
+
+#figure2の設定
+figure2_left, figure2_top = figure1_left, space_up+figure1_hight
+figure2_hight = figure1_hight
 
 #tableの設定
 rows, cols = 9, 3
-table_left, table_top = figure_left + figure_width, space_up
-table_width, table_height = slide_width - (figure_left + space_right + figure_width), slide_height - (space_up + space_bottom)
+table_left, table_top = figure1_left + figure_width, space_up
+table_width, table_height = slide_width - (figure1_left + space_right + figure_width), slide_height - (space_up + space_bottom)
 
 for row in data.itertuples():
   slide = prs.slides.add_slide(blank_slide_layout)
 
-  slide.shapes.add_picture(os.path.join(image_dir, f"{row.File}_plot_noScorpion.png"), figure_left, figure_top, width=figure_width)
+  slide.shapes.add_picture(os.path.join(image_dir, f"{row.File}_plot_noScorpion.png"), figure1_left, figure1_top, height=figure1_hight)
+
+  slide.shapes.add_picture(os.path.join(image_dir, f"{row.File}_mc_hist_10000.png"), figure2_left, figure2_top, height=figure2_hight)
 
   table = slide.shapes.add_table(rows, cols, table_left, table_top, table_width, table_height).table
 

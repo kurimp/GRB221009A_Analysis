@@ -16,8 +16,261 @@ import subprocess
 import pandas as pd
 import glob
 import re
+import concurrent.futures
+import random
+
+def mc_worker(args):
+  (iter_idx, base_config, comp_config, rmf, arf, bkg, exposure, grp_time, ignoreRange, file_path, best_params_base) = args
+
+  pid = os.getpid()
+
+  temp_pfiles_dir = os.path.join(file_path, f"pfiles_{pid}")
+  os.makedirs(temp_pfiles_dir, exist_ok=True)
+
+  if "HEADAS" in os.environ:
+    sys_pfiles = os.path.join(os.environ["HEADAS"], "syspfiles")
+    os.environ["PFILES"] = f"{temp_pfiles_dir};{sys_pfiles}"
+  else:
+    os.environ["PFILES"] = f"{temp_pfiles_dir};/usr/local/headas/syspfiles"
+
+  fake_name = f"temp_mc_{pid}_{iter_idx}"
+
+  work_dir = os.path.join(file_path, "mc_temp_parallel")
+  os.makedirs(work_dir, exist_ok=True)
+
+  import xspec
+  xspec.Xset.chatter = 0
+  xspec.Xset.logChatter = 0
+  xspec.Fit.query = "yes"
+
+  #乱数付与
+  MAX_INT = 2147483647
+  unique_seed = int((pid * 10000 + iter_idx) % MAX_INT)
+  if unique_seed == 0: unique_seed = 1
+
+  xspec.Xset.seed = unique_seed
+
+  np.random.seed(unique_seed)
+  random.seed(unique_seed)
+
+  current_dir = os.getcwd()
+  os.chdir(work_dir)
+
+  result = None
+
+  try:
+    #xspecの情報を初期化
+    xspec.AllData.clear()
+    xspec.AllModels.clear()
+
+    #輝線なしのmodelの読み込みとfitパラメータの代入
+    m_temp = xspec.Model(base_config['expr'])
+    for idx, values in enumerate(best_params_base):
+      m_temp(idx + 1).values = values
+
+    #fakeit
+    fs = xspec.FakeitSettings(response=rmf, arf=arf, background=bkg, exposure=exposure, correction=1.0, fileName=fake_name+".fak")
+    xspec.AllData.fakeit(1, fs, applyStats=True, filePrefix="")
+
+    #grppha
+    out_grp_name = f"{fake_name}_grp.pha"
+    if os.path.exists(out_grp_name):
+      os.remove(out_grp_name)
+
+    grppha_input = (
+        f"chkey BACKFILE {fake_name}_bkg.fak\n"
+        f"chkey RESPFILE {rmf}\n"
+        f"group min {grp_time}\n"
+        f"exit\n"
+    )
+    subprocess.run(
+        ["grppha", f"infile={fake_name}.fak", f"outfile={out_grp_name}", "clobber=yes"], input=grppha_input, text=True, stdout=subprocess.DEVNULL, check=True
+    )
+
+    #fitの実行
+    xspec.AllData.clear()
+    xspec.AllData(f"1:1 {out_grp_name}")
+    xspec.AllData(1).ignore(ignoreRange)
+
+    #fakeitデータへの輝線なしmodelでのfit
+    m_base = xspec.Model(base_config['expr'])
+    for idx, val_str in base_config['params'].items():
+      m_base(idx).values = val_str
+    xspec.Fit.perform()
+    chi2_base = xspec.Fit.statistic
+    dof_base = xspec.Fit.dof
+
+    #fakeitデータへの輝線ありmodelでのfit
+    m_comp = xspec.Model(comp_config['expr'])
+    for idx, val_str in comp_config['params'].items():
+      m_comp(idx).values = val_str
+    xspec.Fit.perform()
+    chi2_comp = xspec.Fit.statistic
+    dof_comp = xspec.Fit.dof
+
+    d_chi2 = chi2_base - chi2_comp
+    d_dof = dof_base - dof_comp
+
+    f_val = (d_chi2 / d_dof) / (chi2_comp / dof_comp) if (d_dof > 0 and dof_comp > 0) else 0.0
+
+    # 結果を格納
+    result = (d_chi2, f_val)
+  except Exception:
+    result = None
+  finally:
+    for f in glob.glob(f"{fake_name}*"):
+        try: os.remove(f)
+        except: pass
+    os.chdir(current_dir)
+  return result
+
+def limit_worker(args):
+  (iter_idx, test_norm, base_config, comp_config, rmf, arf, bkg, exposure, grp_time, ignoreRange, file_path, best_continuum_params, threshold_chi2) = args
+
+  pid = os.getpid()
+
+  temp_pfiles_dir = os.path.join(file_path, f"pfiles_{pid}")
+  os.makedirs(temp_pfiles_dir, exist_ok=True)
+
+  if "HEADAS" in os.environ:
+    sys_pfiles = os.path.join(os.environ["HEADAS"], "syspfiles")
+    os.environ["PFILES"] = f"{temp_pfiles_dir};{sys_pfiles}"
+  else:
+    os.environ["PFILES"] = f"{temp_pfiles_dir};/usr/local/headas/syspfiles"
+
+  fake_name = f"temp_limit_{pid}_{iter_idx}"
+
+  work_dir = os.path.join(file_path, "limit_temp_parallel")
+  os.makedirs(work_dir, exist_ok=True)
+
+  import xspec
+  xspec.Xset.chatter = 0
+  xspec.Xset.logChatter = 0
+  xspec.Fit.query = "yes"
+
+  #乱数付与
+  MAX_INT = 2147483647
+  unique_seed = int((pid * 10000 + iter_idx) % MAX_INT)
+  if unique_seed == 0: unique_seed = 1
+
+  xspec.Xset.seed = unique_seed
+
+  np.random.seed(unique_seed)
+  random.seed(unique_seed)
+
+  current_dir = os.getcwd()
+  os.chdir(work_dir)
+
+  is_detected = False
+
+  try:
+    xspec.AllData.clear()
+    xspec.AllModels.clear()
+
+    # --- 1. 信号入りモデルの作成 (Injection) ---
+    m_inj = xspec.Model(comp_config['expr'])
+
+    for idx, val_str in comp_config['params'].items():
+      m_inj(idx).values = val_str
+
+    # 連続成分を実データのベストフィットに合わせる
+    param_idx = 1
+    for val in best_continuum_params:
+      if param_idx <= m_inj.nParameters:
+        m_inj(param_idx).values = val
+      param_idx += 1
+
+    # 鉄輝線のNormをテスト値に固定してInjection
+    # ※パラメータ番号8がNormである前提 (ZPL+Feモデル)
+    gauss_norm_idx = 8
+    m_inj(gauss_norm_idx).values = test_norm
+    m_inj(gauss_norm_idx).frozen = True
+
+    # --- 2. Fakeit (スペクトル生成) ---
+    fs = xspec.FakeitSettings(response=rmf, arf=arf, background=bkg, exposure=exposure, correction=1.0, fileName=fake_name+".fak")
+    xspec.AllData.fakeit(1, fs, applyStats=True, filePrefix="")
+
+    # --- 3. grppha (グルーピング) ---
+    out_grp_name = f"{fake_name}_grp.pha"
+    if os.path.exists(out_grp_name):
+      os.remove(out_grp_name)
+
+    grppha_input = (
+      f"chkey BACKFILE {fake_name}_bkg.fak\n"
+      f"chkey RESPFILE {rmf}\n"
+      f"group min {grp_time}\n"
+      f"exit\n"
+    )
+    subprocess.run(
+      ["grppha", f"infile={fake_name}.fak", f"outfile={out_grp_name}", "clobber=yes"], input=grppha_input, text=True, stdout=subprocess.DEVNULL, check=True
+    )
+
+    # --- 4. Fit & Recovery Check ---
+    xspec.AllData.clear()
+    xspec.AllData(f"1:1 {out_grp_name}")
+    xspec.AllData(1).ignore(ignoreRange)
+
+    # A. Base Model (Line無し) Fit
+    xspec.AllModels.clear()
+    m_base = xspec.Model(base_config['expr'])
+
+    param_idx = 1
+    for val in best_continuum_params:
+      if param_idx <= m_base.nParameters:
+        m_base(param_idx).values = val
+      param_idx += 1
+
+    xspec.Fit.renorm()
+    xspec.Fit.perform()
+    chi2_base = xspec.Fit.statistic
+
+    # B. Comp Model (Line有り) Fit
+    xspec.AllModels.clear()
+    m_comp = xspec.Model(comp_config['expr'])
+
+    for idx, val_str in comp_config['params'].items():
+      m_comp(idx).values = val_str
+
+    param_idx = 1
+    for val in best_continuum_params:
+      if param_idx <= m_comp.nParameters:
+        m_comp(param_idx).values = val
+      param_idx += 1
+
+    # NormをFreeにして「見つかるか」を試す
+    step_size = test_norm / 10.0 if test_norm > 0 else 1e-4
+    m_comp(gauss_norm_idx).values = f"{test_norm} {step_size} -1e10 -1e10 1e10 1e10"
+    m_comp(gauss_norm_idx).frozen = False
+
+    xspec.Fit.renorm()
+    xspec.Fit.perform()
+    chi2_comp = xspec.Fit.statistic
+
+    # --- 5. 判定 ---
+    d_chi2 = chi2_base - chi2_comp
+
+    if iter_idx == 0: # 最初の1回だけ詳細表示
+      print(f"[DEBUG] PID={os.getpid()} Seed={unique_seed}")
+      print(f"[DEBUG] Base Chi2={chi2_base:.4f}, Comp Chi2={chi2_comp:.4f}, dChi2={d_chi2:.4f}")
+      print(f"[DEBUG] Threshold={threshold_chi2:.4f}")
+
+    if d_chi2 > threshold_chi2:
+      is_detected = True
+
+  except Exception as e:
+    # エラー時は検出失敗扱い
+    is_detected = False
+  finally:
+    # クリーンアップ
+    for f in glob.glob(f"{fake_name}*"):
+      try: os.remove(f)
+      except: pass
+    os.chdir(current_dir)
+  return is_detected
 
 def run_spectrum_analysis(cfg):
+  import xspec
+  xspec.Fit.query = "yes"
   #===========config===========
   #plotのy軸表記選択。FluxならTrue。
   tf_eeufspec = False
@@ -30,11 +283,12 @@ def run_spectrum_analysis(cfg):
   tf_scorpion = False
 
   #モンテカルロシミュレーションの実行の如何
-  is_mc = cfg['spectrum']['parameters']['is_mc']
-  n_mc = cfg['spectrum']['parameters']['mc_time']
+  is_mc = cfg['spectrum']['parameters']['mc']['is']
+  n_mc = cfg['spectrum']['parameters']['mc']['n']
 
   #検出限界検定の実行の如何
-  is_limit = cfg['spectrum']['parameters']['is_limit']
+  is_limit = cfg['spectrum']['parameters']['limit']['is']
+  n_limit = cfg['spectrum']['parameters']['limit']['n']
 
   systematic = cfg['spectrum']['parameters']['systematic']
   ignoreRange = cfg['spectrum']['parameters']['ignoreRange']
@@ -52,7 +306,7 @@ def run_spectrum_analysis(cfg):
     "ZPL": {
       "expr": "tbabs * ztbabs * powerlaw",
       "params": {
-        # 1: ztbabs (Galactic nH) -> 5.38e21 cm^-2 = 0.538
+        # 1: tbabs (Galactic nH) -> 5.38e21 cm^-2 = 0.538
         1: "0.538 -1 0.0 0.0 100.0 100.0",
         # 2: ztbabs (Intrinsic nH) -> 1.29e22 cm^-2 = 1.29
         2: "1.29",
@@ -110,10 +364,9 @@ def run_spectrum_analysis(cfg):
     obs_directory = file_path
     data_filename = f"{file_name}_grp.pha"
 
+
     if bkgtype == "3c50":
       bkg_filename = f"{file_name}_bkg_3c50.pha"
-    elif bkgtype == "scorpion":
-      bkg_filename = f"{file_name}_bkg_scorp.pha"
     else:
       print("bkgtype must be either '3c50' or 'scorpion'.")
 
@@ -179,7 +432,6 @@ def run_spectrum_analysis(cfg):
     try:
       free_params = [i for i in range(1, m.nParameters+1) if not m(i).frozen]
       xspec.Fit.error("2.706 " + " ".join(map(str, free_params)))
-      xspec.Fit.error("2.706 1 2 3 4 5")
     except Exception as e:
       print(f"Error calculation failed: {e}")
 
@@ -233,181 +485,77 @@ def run_spectrum_analysis(cfg):
   def run_monte_carlo(base_config, comp_config, real_delta_chi2, real_f_val, delta_dof, n_sim, spectrum_obj):
     print(f"\n=== Starting Monte Carlo Simulation (N={n_sim}) ===")
 
-    old_chatter = xspec.Xset.chatter
-    old_logChatter = xspec.Xset.logChatter
-    xspec.Xset.chatter = 0
-    xspec.Xset.logChatter = 0
+    data_dir = os.path.abspath(os.path.join(cfg['spectrum']['path']['merge_output'], cfg['spectrum']['path']['merge_name']))
 
-    current_dir = os.getcwd()
-    temp_dir = os.path.join(OUTPUT_DIR, "mc_temp")
-    os.makedirs(temp_dir, exist_ok=True)
+    rmf = spectrum_obj.response.rmf
+    if not os.path.isabs(rmf): rmf = os.path.join(data_dir, rmf)
 
-    data_dir = os.path.abspath(file_path)
-    os.chdir(temp_dir)
+    bkg = spectrum_obj.background.fileName
+    if not os.path.isabs(bkg): bkg = os.path.join(data_dir, bkg)
+
+    arf = ""
+    try:
+      if spectrum_obj.response.arf:
+        arf = spectrum_obj.response.arf
+        if not os.path.isabs(arf): arf = os.path.join(data_dir, arf)
+    except:
+      pass
+
+    exposure = spectrum_obj.exposure
+
+    # BaseモデルのBestFitパラメータを取得（Fakeitの種）
+
+    xspec.AllData(1).ignore(cfg['spectrum']['parameters']['ignoreRange'])
+    m_base = setup_model(base_config)
+    xspec.Fit.perform()
+    best_params_base = [m_base(i).values for i in range(1, m_base.nParameters + 1)]
+
+    worker_args = []
+    for i in range(n_sim):
+      worker_args.append((
+        i, base_config, comp_config, rmf, arf, bkg, exposure,
+        cfg['spectrum']['parameters']['grp_time'],
+        cfg['spectrum']['parameters']['ignoreRange'],
+        data_dir, best_params_base
+      ))
 
     sim_delta_chi2_list = []
     sim_f_list = []
 
+    num_cores = os.cpu_count()  # CPUの論理コア数を取得
+    use_workers = max(1, num_cores - 1)  # 2つだけ予備に残しておく
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=use_workers) as executor:
+      # tqdmで進捗表示
+      results = list(tqdm(executor.map(mc_worker, worker_args), total=n_sim))
+
+    for res in results:
+      if res is not None:
+        sim_delta_chi2_list.append(res[0])
+        sim_f_list.append(res[1])
+
+    # 集計処理
+    success_count = len(sim_delta_chi2_list)
+    if success_count == 0:
+      return None, None, None # 戻り値を変更
+
+    sim_delta_chi2_array = np.array(sim_delta_chi2_list)
+    sim_f_array = np.array(sim_f_list)
+
+    # p値計算
+    n_greater = np.sum(sim_f_array >= real_f_val)
+    p_val_mc = (n_greater + 1) / (success_count + 1)
+
+    # 閾値（95%点）の計算（Limit Check用に返す）
+    threshold_90 = np.percentile(sim_delta_chi2_array, 90)
+    threshold_95 = np.percentile(sim_delta_chi2_array, 95)
+    threshold_99 = np.percentile(sim_delta_chi2_array, 99)
+
+    print(f"MC P-value: {p_val_mc:.4f}")
+    print(f"Thresholds -> 90%: {threshold_90:.2f}, 95%: {threshold_95:.2f}, 99%: {threshold_99:.2f}")
+
     sim_spectra_y = []
     sim_spectra_x = []
-
-    try:
-      # RMFのパス解決
-      rmf_name = spectrum_obj.response.rmf
-      if os.path.isabs(rmf_name):
-          rmf = rmf_name
-      else:
-          rmf = os.path.join(data_dir, rmf_name)
-
-      # BKGのパス解決
-      bkg_name = spectrum_obj.background.fileName
-      if os.path.isabs(bkg_name):
-        bkg = bkg_name
-      else:
-        bkg = os.path.join(data_dir, bkg_name)
-
-      # ARFのパス解決（前回のエラー対応含む）
-      arf = ""
-      try:
-        if spectrum_obj.response.arf:
-            arf_name = spectrum_obj.response.arf
-            if os.path.isabs(arf_name):
-                arf = arf_name
-            else:
-                arf = os.path.join(data_dir, arf_name)
-      except:
-        arf = ""
-      exposure = spectrum_obj.exposure
-      print(f"{rmf=}")
-      print(f"{arf=}")
-      print(f"{bkg=}")
-      print(f"{exposure=}")
-
-      def make_local_link(abs_path):
-        if not abs_path: return ""
-        filename = os.path.basename(abs_path) # ファイル名だけ取り出す
-        if not os.path.exists(filename):
-          try:
-            os.symlink(abs_path, filename) # Linux/Macならシンボリックリンク
-          except:
-            shutil.copy(abs_path, filename) # Windowsやリンク失敗時はコピー
-        return filename # fakeitにはファイル名だけ渡す
-
-      rmf = make_local_link(rmf)
-      bkg = make_local_link(bkg)
-      arf = make_local_link(arf)
-
-    except Exception as e:
-      print(f"MC Error: Could not get response info. {e}")
-      xspec.Xset.chatter = old_chatter
-      os.chdir(current_dir)
-      return None
-
-    xspec.AllData(1).notice("all")
-    xspec.AllData(1).ignore(ignoreRange)
-
-    m_base = setup_model(base_config)
-    xspec.Fit.perform()
-
-    best_params = []
-    for i in range(1, m_base.nParameters + 1):
-      best_params.append(m_base(i).values)
-
-    fake_name = "temp_sim"
-
-    success_count = 0
-    for i in tqdm(range(n_sim)):
-
-      try:
-        xspec.AllData.clear()
-        xspec.AllModels.clear()
-        m_temp = setup_model(base_config)
-
-        for idx, values in enumerate(best_params):
-          m_temp(idx + 1).values = values
-
-        fs = xspec.FakeitSettings(response=rmf, arf=arf, background=bkg, exposure=exposure, correction=1.0, fileName=fake_name+".fak")
-        xspec.AllData.fakeit(1, fs, applyStats=True, filePrefix="")
-
-        # --- 4. grppha の実行 ---
-        out_grp_name = f"{fake_name}_grp.pha"
-        out_grp_path = os.path.join(file_path, out_grp_name)
-
-        if os.path.exists(out_grp_path):
-          os.remove(out_grp_path)
-
-        grppha_input = (
-          f"chkey BACKFILE {fake_name}_bkg.fak\n"
-          f"chkey RESPFILE {rmf}\n"
-          f"group min {grp_time}\n"
-          f"exit\n"
-        )
-
-        try:
-          subprocess.run(
-            ["grppha", f"infile={fake_name}.fak", f"outfile={out_grp_name}", "clobber=yes"],
-            input=grppha_input,
-            text=True,
-            check=True,
-            stdout=subprocess.DEVNULL
-          )
-
-        except subprocess.CalledProcessError:
-          print("❌ grppha failed.")
-          sys.exit(1)
-
-        xspec.AllData.clear()
-        xspec.AllData(f"1:1 {out_grp_name}")
-        s = xspec.AllData(1)
-
-        xspec.AllData(1).ignore(ignoreRange)
-
-        #baseでのfit
-        m_base = setup_model(base_config)
-        xspec.Fit.renorm()
-        xspec.Fit.perform()
-        chi2_base = xspec.Fit.statistic
-        dof_base = xspec.Fit.dof
-
-        xspec.Plot.xAxis = "keV"
-        xspec.Plot("data")
-
-        # 【修正点1】X軸もY軸も毎回保存する（ビン数が変わるため）
-        sim_spectra_x.append(xspec.Plot.x())
-        sim_spectra_y.append(xspec.Plot.y())
-
-        #compでのfit
-        m_comp = setup_model(comp_config)
-        xspec.Fit.renorm()
-        xspec.Fit.perform()
-        chi2_comp = xspec.Fit.statistic
-        dof_comp = xspec.Fit.dof
-
-        d_chi2 = chi2_base - chi2_comp
-        d_dof = dof_base - dof_comp
-
-        if d_dof > 0 and dof_comp > 0 and chi2_comp > 0:
-          numerator = d_chi2 / d_dof
-          denominator = chi2_comp / dof_comp
-          f_val = numerator / denominator
-        else:
-          f_val = 0.0
-
-        if d_chi2 > max(100, real_delta_chi2 * 2):
-          print(f"\n[Warning] Huge Delta Chi2: {d_chi2:.1f}")
-
-        sim_f_list.append(f_val)
-        sim_delta_chi2_list.append(d_chi2)
-        success_count += 1
-      except Exception as e:
-        print(f"MC Loop Error: {e}")
-        continue
-
-    xspec.Xset.chatter = old_chatter
-    xspec.Xset.logChatter = old_logChatter
-
-    os.chdir(current_dir)
-    print("\nMC Finished.")
 
     if success_count == 0:
       return None
@@ -442,8 +590,8 @@ def run_spectrum_analysis(cfg):
         x_min, x_max = min(X_flat), max(X_flat)
         y_min, y_max = min(Y_flat), max(Y_flat)
 
-        xbins = np.logspace(np.log10(x_min), np.log10(x_max), 100)
-        ybins = np.logspace(np.log10(y_min), np.log10(y_max), 100)
+        xbins = np.logspace(np.log10(x_min), np.log10(x_max))
+        ybins = np.logspace(np.log10(y_min), np.log10(y_max))
 
         h = plt.hist2d(X_flat, Y_flat, bins=[xbins, ybins], cmap='inferno', norm=LogNorm())
 
@@ -463,6 +611,7 @@ def run_spectrum_analysis(cfg):
       plt.savefig(spec_plot_path)
       plt.close()
       print(f"  Saved Spectral Density Plot: {spec_plot_path}")
+
 
     #生データをCSVに保存
     mc_csv_path = os.path.join(mc_output_dir, f"{file_name}_mc_{n_sim}.csv")
@@ -491,12 +640,14 @@ def run_spectrum_analysis(cfg):
 
     ax1_hist.set_xlabel(r'$\Delta \chi^2$ (Base - Comp)')
     ax1_hist.set_ylabel('Frequency')
+    ax1_hist.set_yscale('log')
     ax1_hist.legend()
     ax1_hist.set_xlim(0, None)
     ax1_hist.grid(True, alpha=0.3)
 
     ax2_hist.set_xlabel(r'$F$')
     ax2_hist.set_ylabel('Frequency')
+    ax2_hist.set_yscale('log')
     ax2_hist.legend()
     ax2_hist.set_xlim(0, None)
     ax2_hist.grid(True, alpha=0.3)
@@ -506,177 +657,110 @@ def run_spectrum_analysis(cfg):
 
     print(f"  Saved MC Plot: {mc_plot_path}")
 
-    return p_val_mc
+    return p_val_mc, threshold_95, sim_delta_chi2_array
 
-  def check_detection_limit(cfg, target_norm_list, base_config, comp_config, spectrum_obj, n_sim=100):
+  def check_detection_limit(cfg, target_norm_list, base_config, comp_config, spectrum_obj, n_sim, sim_delta_chi2_array=None):
     """
     指定したNormのリストに対して、どれくらいの確率で検出できるか（感度）を調べる
     """
     print(f"\n=== Starting Detection Limit Check (Sensitivity Analysis) ===")
 
     # --- Step 0: 準備 (File Link & Path) ---
-    # fakeit用にRMF/ARF/BKGへのパスを解決・リンク作成 (run_monte_carloと同じロジック)
-    current_dir = os.getcwd()
-    temp_dir = os.path.join(OUTPUT_DIR, "limit_temp")
-    os.makedirs(temp_dir, exist_ok=True)
+    data_dir = os.path.abspath(os.path.join(cfg['spectrum']['path']['merge_output'], cfg['spectrum']['path']['merge_name']))
 
-    data_dir = os.path.abspath(file_path) # 元データの場所
-    os.chdir(temp_dir) # 作業ディレクトリへ移動
+    rmf = spectrum_obj.response.rmf
+    if not os.path.isabs(rmf): rmf = os.path.join(data_dir, rmf)
 
+    bkg = spectrum_obj.background.fileName
+    if not os.path.isabs(bkg): bkg = os.path.join(data_dir, bkg)
+
+    arf = ""
     try:
-      # パス解決
-      rmf_name = spectrum_obj.response.rmf
-      rmf = rmf_name if os.path.isabs(rmf_name) else os.path.join(data_dir, rmf_name)
+      if spectrum_obj.response.arf:
+        arf = spectrum_obj.response.arf
+        if not os.path.isabs(arf): arf = os.path.join(data_dir, arf)
+    except:
+      pass
 
-      bkg_name = spectrum_obj.background.fileName
-      bkg = bkg_name if os.path.isabs(bkg_name) else os.path.join(data_dir, bkg_name)
-
-      try:
-        arf_name = spectrum_obj.response.arf
-        arf = arf_name if os.path.isabs(arf_name) else os.path.join(data_dir, arf_name)
-      except:
-        arf = ""
-
-      exposure = spectrum_obj.exposure
-
-      # ローカルリンク作成関数
-      def make_local_link(abs_path):
-        if not abs_path: return ""
-        filename = os.path.basename(abs_path)
-        if not os.path.exists(filename):
-          try:
-            os.symlink(abs_path, filename)
-          except:
-            shutil.copy(abs_path, filename)
-        return filename
-
-      rmf = make_local_link(rmf)
-      bkg = make_local_link(bkg)
-      arf = make_local_link(arf)
-
-    except Exception as e:
-      print(f"Limit Check Error: Could not get response info. {e}")
-      os.chdir(current_dir)
-      return
+    exposure = spectrum_obj.exposure
 
     # --- Step 1: 閾値の決定 (Null Simulation結果の読み込み) ---
-    mc_output_dir = os.path.join(OUTPUT_DIR, "mc_results")
-    list_candidate_file  = sorted(glob.glob(os.path.join(mc_output_dir, "seglist_*_mc_*.csv"))) # ※ファイル名のパターンは環境に合わせて調整してください
+    if sim_delta_chi2_array is None:
+      mc_output_dir = os.path.join(OUTPUT_DIR, "mc_results")
+      list_candidate_file  = sorted(glob.glob(os.path.join(mc_output_dir, "seglist_*_mc_*.csv"))) # ※ファイル名のパターンは環境に合わせて調整してください
 
-    # もし seglist_ がファイル名に含まれていない場合は以下のように修正
-    if not list_candidate_file:
-      list_candidate_file = sorted(glob.glob(os.path.join(mc_output_dir, f"{file_name}_mc_*.csv")))
+      # もし seglist_ がファイル名に含まれていない場合は以下のように修正
+      if not list_candidate_file:
+        list_candidate_file = sorted(glob.glob(os.path.join(mc_output_dir, f"{file_name}_mc_*.csv")))
 
-    if list_candidate_file:
-      latest_file = max(
-        list_candidate_file,
-        key=lambda f: int(re.search(r'mc_([0-9]+)', os.path.basename(f)).group(1)) if re.search(r'mc_([0-9]+)', os.path.basename(f)) else 0
-      )
-      print(f"Using Null MC Result: {os.path.basename(latest_file)}")
-      mc_data = pd.read_csv(latest_file)
+      if list_candidate_file:
+        latest_file = max(
+          list_candidate_file,
+          key=lambda f: int(re.search(r'mc_([0-9]+)', os.path.basename(f)).group(1)) if re.search(r'mc_([0-9]+)', os.path.basename(f)) else 0
+        )
+        print(f"Using Null MC Result: {os.path.basename(latest_file)}")
+        mc_data = pd.read_csv(latest_file)
 
-      null_delta_chi2 = np.array(mc_data['Simulated_Delta_Chi2'])
-      # 95% 有意水準 (上位5%) を閾値とする
-      threshold_chi2 = np.percentile(null_delta_chi2, 95)
-      print(f"Detection Threshold (95%): Delta Chi2 > {threshold_chi2:.2f}")
+        null_delta_chi2 = np.array(mc_data['Simulated_Delta_Chi2'])
+        threshold_chi2 = np.percentile(null_delta_chi2, 99.73)
+        print(f"Detection Threshold (99.73%): Delta Chi2 > {threshold_chi2:.2f}")
+      else:
+        print("Warning: No MC result file found. Using theoretical threshold approx 4.61 (90%) or 9.21 (99%).")
+        threshold_chi2 = 9.21 # Default fallback
     else:
-      print("Warning: No MC result file found. Using theoretical threshold approx 4.61 (90%) or 9.21 (99%).")
-      threshold_chi2 = 9.21 # Default fallback
+      null_delta_chi2 = sim_delta_chi2_array
+      threshold_chi2 = np.percentile(null_delta_chi2, 99.73)
+      print(f"Detection Threshold (99.73%): Delta Chi2 > {threshold_chi2:.2f}")
 
     # ベースライン（連続成分）のパラメータを決定するために一度Fit
-    xspec.AllData.clear()
-    xspec.AllData(f"1:1 {os.path.join(data_dir, file_name)}_grp.pha") # 元データ読み込み
-    xspec.AllData(1).ignore(ignoreRange)
-    m_base_real = setup_model(base_config)
-    xspec.Fit.perform()
+    current_dir = os.getcwd()
+    try:
+      os.chdir(file_path)
 
-    # 連続成分のベストフィット値を保存（シミュレーションの土台にする）
-    best_continuum_params = []
-    for i in range(1, m_base_real.nParameters + 1):
-      best_continuum_params.append(m_base_real(i).values)
+      xspec.AllData.clear()
+      xspec.AllData(f"1:1 {os.path.join(data_dir, file_name)}_grp.pha")
+      xspec.AllData(1).ignore(ignoreRange)
+      m_base_real = setup_model(base_config)
+      xspec.Fit.perform()
 
+      best_continuum_params = []
+      for i in range(1, m_base_real.nParameters + 1):
+        best_continuum_params.append(m_base_real(i).values)
+    finally:
+      os.chdir(current_dir)
 
     # --- Step 2: 各Normでの検出率調査 (Signal Simulation) ---
     results_norm = []
     results_prob = []
 
-    # XSPECの出力を抑制
-    old_chatter = xspec.Xset.chatter
-    xspec.Xset.chatter = 0
+    # 並列化用のワーカー数決定
+    num_cores = os.cpu_count()
+    use_workers = max(1, num_cores - 1)
 
-    fake_name = "temp_limit_sim"
+    print(f"\nStarting Signal Injection Loop (Parallelized with {use_workers} cores)...")
 
-    print("\nStarting Signal Injection Loop...")
-
+    # Normごとのループはシリアルのまま（早期終了判定のため）
+    print(f"Base Params: {best_continuum_params}")
     for test_norm in target_norm_list:
+
+      # Workerに渡す引数のリストを作成 (N=n_sim個)
+      worker_args = []
+      for i in range(n_sim):
+        worker_args.append((
+          i, test_norm, base_config, comp_config, rmf, arf, bkg, exposure,
+          cfg['spectrum']['parameters']['grp_time'],
+          cfg['spectrum']['parameters']['ignoreRange'],
+          data_dir, best_continuum_params, threshold_chi2
+        ))
+
+      # 並列実行
       pass_count = 0
+      with concurrent.futures.ProcessPoolExecutor(max_workers=use_workers) as executor:
+        # tqdmで進捗表示
+        results = list(tqdm(executor.map(limit_worker, worker_args), total=n_sim, desc=f"Norm={test_norm:.1e}", leave=False))
 
-      # tqdmで進捗表示
-      for i in tqdm(range(n_sim), desc=f"Norm={test_norm:.1e}", leave=False):
-        try:
-          xspec.AllData.clear()
-          xspec.AllModels.clear()
-
-          # 1. 信号入りモデルの作成 (Injection)
-          m_inj = setup_model(comp_config)
-
-          # 連続成分を実データのベストフィットに合わせる
-          # ※パラメータ番号のマッピングがBaseとCompでズレない前提（ZPL+Feなら通常OK）
-          #   もしズレるなら辞書で管理する必要がありますが、ここでは簡易的に順序で適用
-          param_idx = 1
-          for val_str in best_continuum_params:
-            # Compモデルのパラメータ数がBaseより多いので、Baseの分だけ埋める
-            if param_idx <= len(best_continuum_params):
-                m_inj(param_idx).values = val_str
-            param_idx += 1
-
-          # ★重要★: 鉄輝線のNormをテストしたい値に「固定」する
-          # MODELS["ZPL+Fe"]のパラメータ定義で、Gauss Normが何番か確認が必要
-          # 定義順: tbabs(1)*ztbabs(2-3)*(pow(4-5)+gauss(6-8)) -> Normは8番
-          gauss_norm_idx = 8
-          m_inj(gauss_norm_idx).values = test_norm
-          m_inj(gauss_norm_idx).frozen = True # 固定してFakeit
-
-          # 2. Fakeit (スペクトル生成)
-          fs = xspec.FakeitSettings(response=rmf, arf=arf, background=bkg, exposure=exposure, correction=1.0, fileName=fake_name+".fak")
-          xspec.AllData.fakeit(1, fs, applyStats=True, filePrefix="")
-
-          # 3. grppha (グルーピング)
-          out_grp_name = f"{fake_name}_grp.pha"
-          if os.path.exists(out_grp_name): os.remove(out_grp_name)
-
-          grppha_input = f"chkey BACKFILE {fake_name}_bkg.fak\nchkey RESPFILE {rmf}\ngroup min {grp_time}\nexit\n"
-          subprocess.run(["grppha", f"infile={fake_name}.fak", f"outfile={out_grp_name}", "clobber=yes"],
-                        input=grppha_input, text=True, stdout=subprocess.DEVNULL, check=True)
-
-          # 4. Fit & Recovery Check
-          xspec.AllData.clear()
-          xspec.AllData(f"1:1 {out_grp_name}")
-          xspec.AllData(1).ignore(ignoreRange)
-
-          # A. Base Model (Line無し) Fit
-          m_base = setup_model(base_config)
-          xspec.Fit.renorm()
-          xspec.Fit.perform()
-          chi2_base = xspec.Fit.statistic
-
-          # B. Comp Model (Line有り) Fit
-          m_comp = setup_model(comp_config)
-          # ここではNormをFreeにして「見つかるか」を試す
-          m_comp(gauss_norm_idx).values = f"{test_norm} 0.01" # 初期値を与えてFreeに
-          m_comp(gauss_norm_idx).frozen = False
-
-          xspec.Fit.renorm()
-          xspec.Fit.perform()
-          chi2_comp = xspec.Fit.statistic
-
-          # 5. 判定
-          d_chi2 = chi2_base - chi2_comp
-          if d_chi2 > threshold_chi2:
-            pass_count += 1
-
-        except Exception as e:
-          continue
+      # 結果集計 (Trueの数をカウント)
+      pass_count = sum(results)
 
       detection_prob = pass_count / n_sim
       results_norm.append(test_norm)
@@ -684,15 +768,10 @@ def run_spectrum_analysis(cfg):
 
       print(f"  Norm: {test_norm:.2e} -> Prob: {detection_prob*100:.1f}%")
 
-      # 検出率が100%に達して安定したらループを抜ける（時短）
+      # 100%検出が続いたらループを抜ける（時短）
       if len(results_prob) > 3 and all(p >= 0.99 for p in results_prob[-3:]):
-          print("  Reached 100% detection. Stopping loop.")
-          break
-
-    # 設定を戻す
-    xspec.Xset.chatter = old_chatter
-    os.chdir(current_dir) # 元のディレクトリに戻る
-
+        print("  Reached 100% detection. Stopping loop.")
+        break
     # --- Step 3: 結果の保存とプロット ---
 
     # CSV保存
@@ -707,11 +786,11 @@ def run_spectrum_analysis(cfg):
     # プロット作成
     plt.figure(figsize=(8, 6))
     plt.plot(results_norm, results_prob, 'o-', color='navy', label='Detection Probability')
-    plt.axhline(0.9, color='red', linestyle='--', label='90% Confidence')
 
     plt.xscale('log')
     plt.xlabel('Injected Fe Line Norm')
     plt.ylabel('Detection Probability')
+    plt.ylim(-0.1, 1.1)
     plt.title(f'Sensitivity Curve: {file_name}\n(Threshold $\Delta\chi^2$ > {threshold_chi2:.2f})')
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend()
@@ -725,16 +804,16 @@ def run_spectrum_analysis(cfg):
 
   def generate_custom_norms():
     # 基準となる数字
-    bases = [1, 2, 5, 7]
+    bases = [1, 5]
     # 10のマイナス6乗から10の3乗（1000）まで
-    exponents = range(-6, 4)
+    exponents = range(-6, 6)
 
     norm_list = []
     for e in exponents:
-        for b in bases:
-            val = b * (10 ** e)
-            if val <= 1000:
-                norm_list.append(val)
+      for b in bases:
+        val = b * (10 ** e)
+        if val <= 1000:
+          norm_list.append(val)
 
     # 重複を削除してソート（念のため）
     return sorted(list(set(norm_list)))
@@ -780,7 +859,7 @@ def run_spectrum_analysis(cfg):
       print(f"[{name}] Red.Chi2: {red_chi2:.2f}")
 
       if max(m_vals) > 0:
-        ax1_spec.step(x_vals, m_vals, label=f'{name}({bkgtype})($\chi^2_\\nu$={red_chi2:.2f})', linewidth=2, color=colors[i])
+        ax1_spec.step(x_vals, m_vals, where='mid', label=f'{name}({bkgtype})($\chi^2_\\nu$={red_chi2:.2f})', linewidth=2, color=colors[i])
 
       residuals = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y_net, m_vals, y_err)]
       ax2_spec.errorbar(x_vals, residuals, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})", color=colors[i])
@@ -969,27 +1048,26 @@ def run_spectrum_analysis(cfg):
           print(f"{'-'*30}")
 
           p_value_mc = -1.0
+          sim_delta_chi2_array = None
           if is_mc:
-            p_value_mc = run_monte_carlo(MODELS[base_name], MODELS[comp_name], delta_chi2, f_value, delta_dof, n_mc, s)
+            p_value_mc, _, sim_delta_chi2_array = run_monte_carlo(MODELS[base_name], MODELS[comp_name], delta_chi2, f_value, delta_dof, n_mc, s
+            )
             if p_value_mc is not None:
               print(f"Prob(MC)  : {p_value_mc:.3e}")
             else:
               print("Prob(MC)  : Failed")
               p_value_mc = -1.0
 
-            if os.path.exists("temp_sim.fak"):
-              os.remove("temp_sim.fak")
-            if os.path.exists("temp_sim_bkg.fak"):
-              os.remove("temp_sim_bkg.fak")
           if is_limit:
             target_norm_list = generate_custom_norms()
             check_detection_limit(
-                config,
-                target_norm_list,
-                MODELS[base_name],  # Base Model Config
-                MODELS[comp_name],  # Comp Model Config
-                s,                  # Spectrum Object
-                n_sim=10           # 試行回数 (例: 100回)
+              cfg,
+              target_norm_list,
+              MODELS[base_name],
+              MODELS[comp_name],
+              s,
+              n_sim=n_limit,
+              sim_delta_chi2_array=sim_delta_chi2_array
             )
 
           print(f"{'-'*30}")
