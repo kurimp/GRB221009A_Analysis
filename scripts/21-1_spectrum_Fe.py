@@ -3,6 +3,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.ticker import FormatStrFormatter, NullFormatter
 import os
 import csv
 import sys
@@ -18,6 +19,20 @@ import glob
 import re
 import concurrent.futures
 import random
+import io
+from contextlib import redirect_stdout
+
+plt.rcParams.update({
+  "axes.labelsize": 20,      # 軸ラベルのサイズ
+  "xtick.labelsize": 24,     # x軸目盛りのサイズ
+  "ytick.labelsize": 24,     # y軸目盛りのサイズ
+  "lines.linewidth": 3,      # プロット線の太さ
+  "lines.markersize": 10,    # マーカーの大きさ
+  "axes.linewidth": 2,       # グラフ枠線の太さ
+  "xtick.major.width": 2,    # 目盛り線の太さ
+  "ytick.major.width": 2,
+  "savefig.dpi": 300         # 保存時の解像度（高めに設定）
+})
 
 def mc_worker(args):
   (iter_idx, base_config, comp_config, rmf, arf, bkg, exposure, grp_time, ignoreRange, file_path, best_params_base) = args
@@ -108,6 +123,37 @@ def mc_worker(args):
     chi2_comp = xspec.Fit.statistic
     dof_comp = xspec.Fit.dof
 
+    # ========================================================
+    #   科学的に正当な除外判定ロジック (Quality Control)
+    # ========================================================
+
+    # 【基準1: 数学的矛盾】
+    # 自由度が減ったのにChi2が増えた = 局所解 (計算失敗)
+    if chi2_comp > chi2_base + 1e-3: # 浮動小数点誤差を許容
+      raise ValueError(f"Fit Failed: Chi2 inversion (Base:{chi2_base:.2f} < Comp:{chi2_comp:.2f})")
+
+    # 【基準2: 自由度の異常】
+    if dof_base <= 0 or dof_comp <= 0:
+      raise ValueError("DOF Error: Zero or negative DOF")
+
+    # 【基準3: Chi2分布からの極端な逸脱 (Reduced Chi2 check)】
+
+    # Baseモデルに対する判定
+    prob_base = scipy.stats.chi2.sf(chi2_base, dof_base)
+    # Compモデルに対する判定
+    prob_comp = scipy.stats.chi2.sf(chi2_comp, dof_comp)
+
+    # 閾値 (これより確率が低い=あり得ないほどFitが悪い、または良すぎる)
+    CRITICAL_PROB_LOW = 1e-6    # Fitが悪すぎる (Underfitting / Local Minima)
+
+    if prob_base < CRITICAL_PROB_LOW:
+      red_chi2 = chi2_base / dof_base
+      raise ValueError(f"Fit Diverged (Base): RedChi2={red_chi2:.2f}, Prob={prob_base:.2e}")
+
+    if prob_comp < CRITICAL_PROB_LOW:
+      red_chi2 = chi2_comp / dof_comp
+      raise ValueError(f"Fit Diverged (Comp): RedChi2={red_chi2:.2f}, Prob={prob_comp:.2e}")
+
     d_chi2 = chi2_base - chi2_comp
     d_dof = dof_base - dof_comp
 
@@ -115,7 +161,8 @@ def mc_worker(args):
 
     # 結果を格納
     result = (d_chi2, f_val)
-  except Exception:
+  except Exception as e:
+    print(f"Error:{e}")
     result = None
   finally:
     for f in glob.glob(f"{fake_name}*"):
@@ -279,9 +326,6 @@ def run_spectrum_analysis(cfg):
   file_name = cfg['spectrum']['path']['merge_name']
   file_path = os.path.join(cfg['spectrum']['path']['merge_output'], file_name)
 
-  #scorpionでのbackgroundを扱うかどうかを選択。使うならTrue。
-  tf_scorpion = False
-
   #モンテカルロシミュレーションの実行の如何
   is_mc = cfg['spectrum']['parameters']['mc']['is']
   n_mc = cfg['spectrum']['parameters']['mc']['n']
@@ -293,6 +337,7 @@ def run_spectrum_analysis(cfg):
   systematic = cfg['spectrum']['parameters']['systematic']
   ignoreRange = cfg['spectrum']['parameters']['ignoreRange']
 
+  tf_model = cfg['spectrum']['parameters']['model']
   #特定のモデルのみ処理を実施したい場合、モデル名をlistで与える。なければNone。
   only_model = cfg['spectrum']['parameters']['only_model']
 
@@ -454,7 +499,46 @@ def run_spectrum_analysis(cfg):
 
     m_vals = xspec.Plot.model()
 
-    return m, chi2, dof, red_chi2, m_vals
+    def output_eq():
+      log_file = "xspec_temp_log_for_eq.txt"
+
+      if os.path.exists(log_file):
+        os.remove(log_file)
+
+      xspec.Xset.openLog(log_file)
+      xspec.Xset.logChatter = 10
+
+      try:
+        xspec.AllModels.eqwidth(4, err=True, number=1000, level=90)
+      finally:
+        xspec.Xset.closeLog()
+
+      with open(log_file, "r") as f:
+        output = f.read()
+
+      val_match = re.search(r"equiv width for Component \d+:\s+([\d\.eE+-]+)\s+keV", output)
+      # 例: Equiv width error range:  0.0743171 - 0.267984 keV
+      err_match = re.search(r"error range:\s+([\d\.eE+-]+)\s+-\s+([\d\.eE+-]+)\s+keV", output)
+
+      if val_match:
+        print(f"抽出された値: {val_match.group(1)}")
+        val_match = val_match.group(1)
+      if err_match:
+        print(f"抽出された誤差範囲: {err_match.group(1)} to {err_match.group(2)}")
+        err_match = [err_match.group(1), err_match.group(2)]
+
+      print(f"{val_match=}", f"{err_match=}")
+
+      os.remove(log_file)
+
+      return val_match, err_match
+
+    if model_config['expr'] == "tbabs * ztbabs * (powerlaw + gauss)":
+      eq_val, eq_err = output_eq()
+    else:
+      eq_val, eq_err = None, [None, None]
+
+    return m, chi2, dof, red_chi2, m_vals, eq_val, eq_err
 
   def treat_data(s):
     xspec.Plot.xAxis = "keV"
@@ -619,22 +703,15 @@ def run_spectrum_analysis(cfg):
     print(f"  Saved MC Data: {mc_csv_path}")
 
     # 2. ヒストグラムの作成と保存
-    fig_hist, (ax1_hist, ax2_hist) = plt.subplots(2, 1, figsize=(10, 6), constrained_layout=True)
+    fig_hist, ax1_hist = plt.subplots(1, 1, figsize=(10, 6), constrained_layout=True)
 
     # ヒストグラムの描画
     # Delta Chi2用のビン
     max_d_chi2 = np.max(sim_delta_chi2_array)
     bins_d_chi2 = np.arange(0, max_d_chi2 + 1.0, 1)
 
-    # F値用のビン
-    max_f = np.max(sim_f_array)
-    bins_f = np.arange(0, max_f + 1.0, 0.1)
-
     ax1_hist.hist(sim_delta_chi2_array, bins=bins_d_chi2, color='skyblue', edgecolor='black', alpha=0.7, label='Simulated Null Distribution')
-    ax1_hist.axvline(real_delta_chi2, color='red', linestyle='dashed', linewidth=2, label=rf'Observed $\Delta\chi^2$ ({real_delta_chi2:.2f})')
-
-    ax2_hist.hist(sim_f_array, bins=bins_f, color='skyblue', edgecolor='black', alpha=0.7, label='Simulated Null Distribution')
-    ax2_hist.axvline(real_f_val, color='red', linestyle='dashed', linewidth=2, label=rf'Observed $F$ ({real_f_val:.2f})')
+    ax1_hist.axvline(real_delta_chi2, color='red', linestyle='dashed', linewidth=2, label=rf'Observed $\Delta\chi^2$({real_delta_chi2:.2f})')
 
     fig_hist.suptitle(f'Monte Carlo Simulation:{file_name} (N={success_count})\n$p_{{mc}} = {p_val_mc:.4f}$')
 
@@ -644,13 +721,6 @@ def run_spectrum_analysis(cfg):
     ax1_hist.legend()
     ax1_hist.set_xlim(0, None)
     ax1_hist.grid(True, alpha=0.3)
-
-    ax2_hist.set_xlabel(r'$F$')
-    ax2_hist.set_ylabel('Frequency')
-    ax2_hist.set_yscale('log')
-    ax2_hist.legend()
-    ax2_hist.set_xlim(0, None)
-    ax2_hist.grid(True, alpha=0.3)
 
     mc_plot_path = os.path.join(mc_output_dir, f"{file_name}_mc_hist_{n_sim}.png")
     fig_hist.savefig(mc_plot_path)
@@ -818,33 +888,30 @@ def run_spectrum_analysis(cfg):
     # 重複を削除してソート（念のため）
     return sorted(list(set(norm_list)))
 
-  #グラフエリアの作成
-  fig_spec, (ax1_spec, ax2_spec) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
-  plt.subplots_adjust(hspace=0.0)
+  if tf_model:
+    #グラフエリアの作成
+    fig_spec, (ax1_spec, ax2_spec) = plt.subplots(2, 1, figsize=(10, 6), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, constrained_layout=True)
+    plt.subplots_adjust(hspace=0.0)
 
-  #BackGroundの種類ごとに処理
-  for bkgtype in ["3c50", "scorpion"]:
-    if bkgtype=="scorpion":
-      if tf_scorpion:
-        pass
-      else:
-        continue
-    #load_dataでロードしたデータをtreat_dataに与えて各種データを取得
-    s = load_data(file_name, bkgtype)
-    if s is None:
-      continue
-    x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(s)
+  else:
+    fig_spec, ax1_spec = plt.subplots(1, 1, figsize=(10, 6))
 
-    #データのプロット
-    ax1_spec.errorbar(x_vals, y_tot, fmt='.', label=f'Total({bkgtype})', alpha=0.3)
-    ax1_spec.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
-    #ax1_spec.errorbar(x_vals, y_net, yerr=y_err, fmt='.', label=f'Net({bkgtype})', alpha=0.3)
-    ax1_spec.step(x_vals, y_bkg, where='mid', label=f'Background({bkgtype})', alpha=0.3)
+  bkgtype = "3c50"
+  #load_dataでロードしたデータをtreat_dataに与えて各種データを取得
+  s = load_data(file_name, bkgtype)
 
-    ftest_results = {}
+  x_vals, x_err, y_net, y_err, y_bkg, y_tot = treat_data(s)
 
-    colors = ["C3", "C4", "C5", "C6", "C7", "C8", "C9"]
+  #データのプロット
+  ax1_spec.errorbar(x_vals, y_tot, fmt='.', label=f'Total', alpha=0.3)
+  ax1_spec.errorbar(x_vals, y_net, xerr=x_err, yerr=y_err, fmt='.', label=f'Net', alpha=0.3)
+  ax1_spec.step(x_vals, y_bkg, where='mid', label=f'Background', alpha=0.3)
 
+  ftest_results = {}
+
+  colors = ["C3", "C4", "C5", "C6", "C7", "C8", "C9"]
+
+  if tf_model:
     for i, (name, config) in enumerate(MODELS.items()):
       if only_model == None:
         pass
@@ -853,17 +920,12 @@ def run_spectrum_analysis(cfg):
           continue
 
       #fitを実行
-      s = load_data(file_name, bkgtype)
-      m, chi2, dof, red_chi2, m_vals = run_fit(config)
-
-      print(f"[{name}] Red.Chi2: {red_chi2:.2f}")
-
-      if max(m_vals) > 0:
-        ax1_spec.step(x_vals, m_vals, where='mid', label=f'{name}({bkgtype})($\chi^2_\\nu$={red_chi2:.2f})', linewidth=2, color=colors[i])
+      m, chi2, dof, red_chi2, m_vals, eq_val, eq_err = run_fit(config)
+      print(f"{eq_val=}")
+      print(f"{eq_err=}")
 
       residuals = [(y - m) / e if e > 0 else 0 for y, m, e in zip(y_net, m_vals, y_err)]
-      ax2_spec.errorbar(x_vals, residuals, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({bkgtype})({name})", color=colors[i])
-
+      ax2_spec.errorbar(x_vals, residuals, xerr=x_err, yerr=1, fmt='.', alpha=0.6, label=f"Residuals({name})", color=colors[i])
 
       csv_path = os.path.join(OUTPUT_DIR, f'{file_name}_{bkgtype}_{name}.csv')
 
@@ -954,9 +1016,21 @@ def run_spectrum_analysis(cfg):
             'Photon_Index_err_plus',      # +
             'Fit_Stat_Chi2',   # Fit Stat.
             'DOF',             # d.o.f.
-            'Nhp'              # Nhp
+            'Nhp',              # Nhp
+            'eq_val',
+            'eq_err_minus',
+            'eq_err_plus'
           ]
           writer.writerow(header)
+
+        print(f"{type(eq_err)=}")
+
+        if eq_val is not None:
+          eq_val = f"{float(eq_val):.5f}"
+        if eq_err[0] is not None:
+          eq_err[0] = f"{float(eq_err[0]):.5f}"
+        if eq_err[1] is not None:
+          eq_err[1] = f"{float(eq_err[1]):.5f}"
 
         # データ行
         writer.writerow([
@@ -972,12 +1046,40 @@ def run_spectrum_analysis(cfg):
           f"{param04_err_plus:.5f}",
           f"{stat_val:.2f}",
           dof_val,
-          f"{nhp:.3e}"
+          f"{nhp:.3e}",
+          eq_val,
+          eq_err[0],
+          eq_err[1]
         ])
 
       print(f"  Saved Summary: {summary_csv_path}")
 
       ftest_results[name] = {"chi2": chi2, "dof": dof}
+
+      xspec.Plot.add = True
+      xspec.Plot("ldata")
+
+      nGroups = xspec.AllData.nGroups
+      model = xspec.AllModels(1)
+
+      for g in range(1, nGroups + 1):
+        try:
+          comp_vals = xspec.Plot.addComp(g, 2)
+          ax1_spec.plot(
+              x_vals,
+              comp_vals,
+              linestyle="--",
+              alpha=0.7,
+              label=f"{name}:gaussian (G{g})"
+          )
+        except Exception as e:
+          print(f"Error:{e}")
+          pass
+
+      print(f"[{name}] Red.Chi2: {red_chi2:.2f}")
+
+      if max(m_vals) > 0:
+        ax1_spec.step(x_vals, m_vals, where='mid', label=f'{name}($\chi^2$={chi2:.2f}, $\chi^2_\\nu$={red_chi2:.2f})', linewidth=2, color=colors[i])
 
     #ftest_resultsに貯めたデータを用いてftest
     ftest_csv_path = os.path.join(summary_dir, 'ftest.csv')
@@ -1090,11 +1192,9 @@ def run_spectrum_analysis(cfg):
             ])
 
   #plotの整理
-  fig_spec.suptitle(f'Spectrum:{file_name}')
+  #fig_spec.suptitle(f'Spectrum:{file_name}')
 
-  ax1_spec.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
-  ax2_spec.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
-
+  #ax1_spec.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
 
   ax1_spec.set_xscale('log')
   ax1_spec.set_yscale('log')
@@ -1105,16 +1205,28 @@ def run_spectrum_analysis(cfg):
   elif not tf_eeufspec:
     ax1_spec.set_ylabel(r'Counts s$^{-1}$ keV$^{-1}$')
 
-  ax1_spec.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
   ax1_spec.grid(True, which="both", ls="--", alpha=0.3)
 
-  ax2_spec.axhline(0,color="black", linestyle='--', alpha=0.5)
-  ax2_spec.set_xscale('log')
-  ax2_spec.set_ylabel('(Data-Model)/Error')
-  ax2_spec.set_xlabel('Energy (keV)')
-  ax2_spec.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
-  ax2_spec.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
-  ax2_spec.grid(True, which="both", ls=":", alpha=0.5)
+  if tf_model:
+    ax1_spec.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax2_spec.axvline(5.560, linestyle='--', color="black", alpha=0.2, label="Fe(E=5.560 keV)")
+    ax2_spec.axhline(0,color="black", linestyle='--', alpha=0.5)
+    ax2_spec.set_ylabel('(Data-Model)/Error')
+    ax2_spec.set_xlabel('Energy (keV)')
+    ax2_spec.set_ylim(-5, 5) # ズレの表示範囲 (±5シグマ)
+    ax2_spec.legend(framealpha=0.1, bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax2_spec.grid(True, which="both", ls=":", alpha=0.5)
+    ax2_spec.set_xticks([1, 2, 3, 4, 6, 10])
+    ax2_spec.xaxis.set_major_formatter(FormatStrFormatter('%g'))
+    ax2_spec.xaxis.set_minor_formatter(NullFormatter())
+  else:
+    ax1_spec.legend()
+    ax1_spec.set_xlabel('Energy (keV)')
+    ax1_spec.grid(True, which="both", ls=":", alpha=0.5)
+    ax1_spec.set_xticks([1, 2, 3, 4, 6, 10])
+    ax1_spec.xaxis.set_major_formatter(FormatStrFormatter('%g'))
+    ax1_spec.xaxis.set_minor_formatter(NullFormatter())
+    plt.tight_layout()
 
   option_figure_name=[]
 
@@ -1122,11 +1234,6 @@ def run_spectrum_analysis(cfg):
     option_figure_name.append("_eeufspec")
   elif not tf_eeufspec:
     option_figure_name.append("_plot")
-
-  if tf_scorpion:
-    option_figure_name.append("_withScorpion")
-  elif not tf_scorpion:
-    option_figure_name.append("_noScorpion")
 
   figure_name = str(file_name)
   for option in option_figure_name:

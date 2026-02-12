@@ -47,9 +47,15 @@ table_width, table_height = slide_width - (figure1_left + space_right + figure_w
 for row in data.itertuples():
   slide = prs.slides.add_slide(blank_slide_layout)
 
-  slide.shapes.add_picture(os.path.join(image_dir, f"{row.File}_plot_noScorpion.png"), figure1_left, figure1_top, height=figure1_hight)
+  try:
+    slide.shapes.add_picture(os.path.join(image_dir, f"spectrum_old/{row.File}_plot_noScorpion.png"), figure1_left, figure1_top, height=figure1_hight)
+  except Exception:
+    pass
 
-  slide.shapes.add_picture(os.path.join(image_dir, f"{row.File}_mc_hist_10000.png"), figure2_left, figure2_top, height=figure2_hight)
+  try:
+    slide.shapes.add_picture(os.path.join(image_dir, f"mc_new/{row.File}_mc_hist_10000.png"), figure2_left, figure2_top, height=figure2_hight)
+  except Exception:
+    pass
 
   table = slide.shapes.add_table(rows, cols, table_left, table_top, table_width, table_height).table
 

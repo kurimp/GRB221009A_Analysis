@@ -7,9 +7,23 @@ import glob
 import re
 import pandas as pd
 
-norm_target = [0.00012, 7.5e-05, 0.0004]
-trigger = 9.38
-observed = 8.89
+plt.rcParams.update({
+  "axes.labelsize": 20,      # 軸ラベルのサイズ
+  "xtick.labelsize": 24,     # x軸目盛りのサイズ
+  "ytick.labelsize": 24,     # y軸目盛りのサイズ
+  "lines.linewidth": 3,      # プロット線の太さ
+  "lines.markersize": 10,    # マーカーの大きさ
+  "legend.fontsize": 16,     # 凡例のサイズ
+  "axes.linewidth": 2,       # グラフ枠線の太さ
+  "xtick.major.width": 2,    # 目盛り線の太さ
+  "ytick.major.width": 2,
+  "savefig.dpi": 300         # 保存時の解像度（高めに設定）
+})
+
+norm_target = [0.009]
+weight = 1
+trigger = 9.07
+observed = 2.52
 
 def run_plot(cfg):
   file_name = cfg['spectrum']['path']['merge_name']
@@ -47,15 +61,18 @@ def run_plot(cfg):
   norm_unique = limit_data['Norm'].unique()
 
   processed_any = False
+  norm_target_str = [f"{norm:.8e}" for norm in norm_target]
   for norm in norm_unique:
-    if norm not in norm_target:
+    norm_str = f"{norm:.8e}"
+    if norm_str not in norm_target_str:
       continue
     processed_any = True
     data = limit_data[limit_data['Norm']==norm]['Delta_Chi2']
-    ax1_hist.hist(data, weights=np.ones_like(data), bins=bins_d_chi2, edgecolor='black', alpha=0.3, label=f'Injected($\mathrm{{Norm}}={norm:.1e}$))')
+    print(f"Plotting Norm: {norm_str}, Data points: {len(data)}")
+    ax1_hist.hist(data, weights=np.ones_like(data), bins=bins_d_chi2*weight, edgecolor='black', alpha=0.3, label=f'Injected($\mathrm{{Norm}}={float(norm):.1e}$))')
 
   if not processed_any:
-    raise ValueError(f"Error: None of the target norms {norm_target} were found in the dataset. Available norms are: {norm_unique}")
+    raise ValueError(f"Error: None of the target norms {norm_target_str} were found in the dataset. Available norms are: {norm_unique}")
 
   ax1_hist.axvline(trigger, linestyle='-', alpha=0.2, label=f"threshold($\Delta\chi^2={trigger:.2f}$)")
   ax1_hist.axvline(observed, linestyle='--', alpha=0.2, label=f"observed($\Delta\chi^2={observed:.2f}$)")
@@ -64,7 +81,7 @@ def run_plot(cfg):
   ax1_hist.set_ylabel('Frequency')
   ax1_hist.set_yscale('log')
   ax1_hist.legend()
-  ax1_hist.set_xlim(0, None)
+  ax1_hist.set_xlim(0, 100)
   ax1_hist.grid(True, alpha=0.3)
 
   plot_path = os.path.join(OUTPUT_DIR, f"{file_name}_hists.png")

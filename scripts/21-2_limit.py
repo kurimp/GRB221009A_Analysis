@@ -1,16 +1,12 @@
 import xspec
+import traceback
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
 import os
-import csv
 import sys
 from scripts.utils.read_config import cfg
-import datetime
-import scipy.stats
 import numpy as np
-import shutil
 from tqdm import tqdm
 import subprocess
 import pandas as pd
@@ -18,6 +14,8 @@ import glob
 import re
 import concurrent.futures
 import random
+
+steps_per_decade = cfg['spectrum']['parameters']['limit']['steps_per_decade']
 
 # 設定からパスなどを取得
 file_name = cfg['spectrum']['path']['merge_name']
@@ -30,9 +28,8 @@ n_limit = cfg['spectrum']['parameters']['limit']['n']
 threshold_ratio = cfg['spectrum']['parameters']['limit']['threshold_ratio(%)']
 detected_ratio = cfg['spectrum']['parameters']['limit']['detected_ratio(%)']
 norm_pointed = cfg['spectrum']['parameters']['limit']['norm_pointed']
-bases = cfg['spectrum']['parameters']['limit']['bases']
-exp_start = cfg['spectrum']['parameters']['limit']['exponents'][0]
-exp_end = cfg['spectrum']['parameters']['limit']['exponents'][1]
+start = cfg['spectrum']['parameters']['limit']['norm_range'][0]
+end = cfg['spectrum']['parameters']['limit']['norm_range'][1]
 
 # check_detection_limit内で使用されるグローバル変数
 OUTPUT_DIR = f"results/spectrum/{file_name}"
@@ -79,16 +76,18 @@ def setup_model(model_config):
 
 def generate_custom_norms():
   if norm_pointed == 'None':
-    exponents = range(exp_start, exp_end)
 
-    norm_list = []
-    for e in exponents:
-      for b in bases:
-        val = b * (10 ** e)
-        if val <= 10000000:
-          norm_list.append(val)
+    fine_start = float(start)
+    fine_end = float(end)
 
-    norm_list = sorted(list(set(norm_list)))
+    # 計算
+    print(f"{fine_start=}")
+    print(f"{fine_end=}")
+    decades = np.log10(fine_end) - np.log10(fine_start)
+    num_steps = int(decades * steps_per_decade) + 1
+
+    # 生成
+    norm_list = np.geomspace(fine_start, fine_end, num_steps).tolist()
 
   else:
     norm_list = norm_pointed
@@ -217,6 +216,8 @@ def limit_worker(args):
 
     xspec.Fit.renorm()
     xspec.Fit.perform()
+    xspec.Fit.perform()
+
     chi2_comp = xspec.Fit.statistic
 
     # --- 5. 判定 ---
@@ -226,7 +227,9 @@ def limit_worker(args):
       is_detected = True
 
     result = (is_detected, d_chi2)
-  except Exception as e:
+  except Exception as e:# ★ここを書き換える★
+    print(f"\n❌ Worker Error (Norm={test_norm}): {e}")
+    traceback.print_exc()  # エラーの詳細（スタックトレース）を表示
     # エラー時は検出失敗扱い
     result = (False, None)
   finally:
@@ -329,7 +332,7 @@ def check_detection_limit(cfg, target_norm_list, base_config, comp_config, spect
     pass_count = 0
     with concurrent.futures.ProcessPoolExecutor(max_workers=use_workers) as executor:
       # tqdmで進捗表示
-      results = list(tqdm(executor.map(limit_worker, worker_args), total=n_sim, desc=f"Norm={test_norm:.1e}", leave=False))
+      results = list(tqdm(executor.map(limit_worker, worker_args), total=n_sim, desc=f"Norm={test_norm:.2e}", leave=False))
 
     for res in results:
       results_detected.append(res[0])
@@ -349,7 +352,10 @@ def check_detection_limit(cfg, target_norm_list, base_config, comp_config, spect
     print(f"  Norm: {test_norm:.2e} -> Prob: {detection_prob*100:.1f}%")
 
     # 100%検出が続いたらループを抜ける（時短）
-    if len(results_prob) > 5 and all(p >= 1 for p in results_prob[-5:]):
+    if len(results_prob) > 5 and all(p >= 0.9 for p in results_prob[-5:]):
+      print("  Reached 90% detection. Stopping loop.")
+      break
+    elif len(results_prob) > 3 and all(p == 1 for p in results_prob[-3:]):
       print("  Reached 100% detection. Stopping loop.")
       break
 
@@ -361,7 +367,7 @@ def check_detection_limit(cfg, target_norm_list, base_config, comp_config, spect
 
   # CSV保存
   df_res = pd.DataFrame({"Norm": results_norm, "Probability": results_prob})
-  csv_save_path = os.path.join(limit_dir, f"{file_name}_sensitivity_details.csv")
+  csv_save_path = os.path.join(limit_dir, f"{file_name}_sensitivity_details_{n_sim}.csv")
   df_res.to_csv(csv_save_path, index=False)
   print(f"\nSaved Sensitivity Data: {csv_save_path}")
 
@@ -391,7 +397,7 @@ if __name__ == "__main__":
   # 追加: XSPEC設定 (メインプロセス)
   xspec.Fit.query = "yes"
 
-  # データをロードするための準備 (run_spectrum_analysis内の一部を再現)
+  # データをロードするための準備
   print(f"Loading data from: {file_path}")
   obs_directory = file_path
   data_filename = f"{file_name}_grp.pha"

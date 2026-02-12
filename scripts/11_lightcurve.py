@@ -75,38 +75,38 @@ for datafilename in list_datafilename:
     print("-"*15)
     #各データの情報を出力するか
     display_info = True
-    
+
     #各種情報の整理と出力
     header_primary = datafile['PRIMARY'].header
     header_rate = datafile['RATE'].header
-    
+
     #データの時刻系の取得
     time_system = header_rate.get('TIMESYS', 'TT').lower()
-    
+
     #NICERミッション基準時刻の取得
     mjd_ref = header_rate['MJDREFI']
     t_ref_absolute = Time(mjd_ref, format='mjd', scale=time_system.lower())
-    
+
     #観測開始までの通算秒の取得と単位sの付与
     t_start_met_sec = u.Quantity(header_rate.get('TSTART', 0.0), u.s)
-    
+
     #観測開始時刻の計算
     t_obs_start = t_ref_absolute + t_start_met_sec
-    
+
     ObsID = header_primary.get('OBS_ID', 'N/A')
     print(f"OBS-ID:{ObsID}")
     print(f"観測開始時刻:{t_obs_start.isot}")
-    
+
     #除外時刻の判定
     if since_time is not None and t_obs_start >= since_time:
       print("The Observation Time is after the specified 'since' time.")
       continue
-    
+
     #除外ObsIDの判定
     if str(ObsID) in excluded_obsids:
       print(f"The ObsID({ObsID}) is specified for exclusion.")
       continue
-    
+
     if display_info:
       print(f"MJDREF:{mjd_ref}")
       print(f"OBJECT:{header_primary.get('OBJECT', 'N/A')}")
@@ -115,49 +115,49 @@ for datafilename in list_datafilename:
       print(f"EXPOSURE:{header_rate.get('EXPOSURE', '0.0')}")
       print(f"TIMESYS:{time_system}")
     data = datafile['RATE'].data
-    
+
     if data is None or len(data) == 0:
       print(f"⚠️ Warning: No data found in {datafilename} (ObsID: {ObsID}). Skipping...")
       continue
-    
+
     #if header_rate.get('EXPOSURE', '0.0') < 500:
     #  print(f"Skipping...")
     #  continue
-    
+
     #各ObsIDの観測開始時刻、観測終了時刻の表の作成
     _df_info = pd.DataFrame({'OBS-ID':header_primary.get('OBS_ID', 'N/A'), 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
     df_info = pd.concat([df_info, _df_info])
-    
+
     #各点のデータの代入
     time = data['TIME']
     rate = data['RATE']
     error = data['ERROR']
-    
+
     #観測開始時刻からの経過時間への単位sの付与
     time_elapsed_from_start = u.Quantity(time, u.s)
-    
+
     #データの絶対時刻の計算
     time_abs = t_obs_start + time_elapsed_from_start
-    
+
     time_abs_from_trigger = time_abs - Time(59861.55346065, format='mjd', scale=time_system.lower())
-    
+
     #datetimeオブジェクトに変換
     time_abs_datetime = time_abs.datetime
-    
+
     duration = ((time_abs_from_trigger[-1]+u.Quantity(60, u.s))-time_abs_from_trigger[0]).to_value(u.s)
     count_average = rate.mean()
     count_sum = count_average * duration
-    
+
     count_error = math.sqrt(count_sum) / duration
-    
+
     list_time_elapsed_indiv.extend(time_abs_from_trigger)
     list_rate_indiv.extend(rate)
     list_error_indiv.extend(error)
-    
+
     list_time_elapsed_ObsID.append(time_abs_from_trigger[0])
     list_rate_ObsID.append(count_average)
     list_error_ObsID.append(count_error)
-    
+
     time_abs_from_trigger = [int(td.to_value(u.s)) for td in time_abs_from_trigger]
 
 for _ in range(5):
@@ -222,37 +222,37 @@ def BrokenPowerLawModel(x, amplitude, t_break, alpha1, alpha2):
   """
   # x < t_break の部分と x >= t_break の部分で式を変える
   # ※計算を安定させるため、t_breakで正規化して繋げることが多いです
-  
+
   if t_break <= 0:
     return np.ones_like(x) * 1e30
-  
+
   model_output = np.zeros_like(x)
-  
+
   # ブレイク前
   mask1 = x < t_break
   if np.any(mask1):
     model_output[mask1] = amplitude * (x[mask1] / t_break) ** (-alpha1)
-  
+
   # ブレイク後
   mask2 = x >= t_break
   if np.any(mask2):
     model_output[mask2] = amplitude * (x[mask2] / t_break) ** (-alpha2)
-  
+
   return model_output
 
 if tf:
   valid_mask = (x_data > 0) & (error_data > 0) & np.isfinite(y_data)
-  
+
   if np.sum(valid_mask) == 0:
     print("Error: No valid data points for fitting (all errors are 0 or x <= 0).")
     sys.exit(1)
-  
+
   x_safe = x_data[valid_mask]
   y_safe = y_data[valid_mask]
   error_safe = error_data[valid_mask]
-  
+
   weights = 1.0 / error_safe
-  
+
   for _ in range(5):
     try:
       tf_model = input("Enter 1 to use Broken Power Law Model, or 0 Power Law Model (default is 0).:")
@@ -266,12 +266,12 @@ if tf:
       break
   else:
     print("Processing interrupted.")
-  
+
   if tf_model:
     model_name = "Broken Power Law"
     model = Model(BrokenPowerLawModel)
     params = model.make_params()
-    
+
     params['t_break'].set(value=(np.min(x_safe) + np.max(x_safe)) / 2, min=np.min(x_safe), max=np.max(x_safe))
     params['amplitude'].set(value=y_safe[0], min=0)
     params['alpha1'].set(value=1.0, min=-10, max=10)
@@ -280,7 +280,7 @@ if tf:
     model_name = "Power Law"
     model = PowerLawModel()
     params = model.guess(y_safe, x=x_safe)
-  
+
   result = model.fit(y_safe, params, x=x_safe, weights=weights)
   print(result.fit_report())
 
@@ -298,14 +298,14 @@ ax.set_ylim(None, 10000)
 #ax.set_xlim(datetime(2022, 10, 9, 0, 0, 0), datetime(2022, 10, 30, 0, 0, 0))
 
 #ax.grid(True, which='both', linestyle=':', alpha=0.6)
-ax.axhline(0.36666667, linestyle='--', color="black", alpha=0.5)
+#ax.axhline(0.36666667, linestyle='--', color="black", alpha=0.5)
 ax.minorticks_on()
 
 #date_form = mdates.DateFormatter('%Y/%m/%d %H')
 #ax.xaxis.set_major_formatter(date_form)
 #fig.autofmt_xdate()
 
-ax.legend()
+#ax.legend()
 plt.tight_layout()
 
 #各種データの保存
