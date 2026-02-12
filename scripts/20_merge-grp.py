@@ -153,7 +153,6 @@ def run_merge_grp(cfg):
     )
     print(f"\n✅ Created: {out_grp_path}")
 
-
     for f in src_files + bkg_files + rmf_files + arf_files:
       try:
         os.remove(os.path.join(output_dir, f))

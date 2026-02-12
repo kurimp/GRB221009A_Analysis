@@ -75,13 +75,13 @@ re_popt, re_pcov = curve_fit(gaussian_func, re_dist['class_value'], re_dist['fre
 re_fit_norm_x = np.arange(popt[1]-popt[2]*2, popt[1]+popt[2]*2, width * 0.1)
 re_fit_norm_y = gaussian_func(re_fit_norm_x, re_popt[0], re_popt[1], re_popt[2])
 
-ax.plot(re_fit_norm_x, re_fit_norm_y, label=f"Fitted normal distribution:$A={re_popt[0]:2f}$, $\mu={re_popt[1]:2f}$, $\sigma={re_popt[2]:2f}$", color="green")
+ax.plot(re_fit_norm_x, re_fit_norm_y, label=f"Fitted normal distribution:$A={re_popt[0]:2f}$, $\mu={re_popt[1]:2f}$, $\sigma={re_popt[2]:2f}$", color="red")
 
 #正規分布の表示
 rep_norm_x = np.arange(0.048-0.018*2, 0.048+0.018*2, width * 0.1)
 rep_norm_y = gaussian_func(rep_norm_x, re_popt[0], 0.048, 0.018)
-ax.plot(rep_norm_x, rep_norm_y, label=f"Reported normal distribution:$A={re_popt[0]:2f}$, $\mu=0.048$, $\sigma=0.018$", color="red")
-ax.axvline(0.048, linestyle='--', color="black", alpha=0.5)
+#ax.plot(rep_norm_x, rep_norm_y, label=f"Reported normal distribution:$A={re_popt[0]:2f}$, $\mu=0.048$, $\sigma=0.018$", color="red")
+#ax.axvline(0.048, linestyle='--', color="black", alpha=0.5)
 ax.set_xscale('linear')
 #ax.set_yscale('log')
 ax.set_xlim(min-min*0.05, max+max*0.05)

@@ -19,7 +19,7 @@ if [[ "${FILENAME}" == *"_"* ]]; then
   exit 1
 fi
 
-rm -r "./data/collect/${FILENAME}"
+#rm -r "./data/collect/${FILENAME}"
 
 mkdir -p "./data/collect/${FILENAME}"
 

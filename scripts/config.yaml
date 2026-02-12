@@ -1,43 +1,60 @@
 general:
   parameters:
-    trigger_time: 59861.55347211 #MJD
+    trigger_time: 59861.55347211
     ra: 288.2643
     dec: 19.7712
 segment:
   parameters:
     is_obs_seg: seg
     BIN: 120
-    PI_MIN: 1200
-    PI_MAX: 1500
+    PI_MIN: 30
+    PI_MAX: 1000
   path:
     result_root: results/lightcurve/segments
-    obs_list_name: segInfo_fixed02.csv
-    result_time_dir : time_fixed02
-    collect_dir: seg02
+    obs_list_name: segInfo_fixed.csv
+    result_time_dir: time_fixed
+    collect_dir: seg01
 lightcurve:
   parameters:
     lc_xmin: 10000
-    lc_xmax: 4000000
-    lc_ymin: 0.007
-    lc_ymax: 10000
+    lc_xmax: 3000000
+    lc_ymin: 0.01
+    lc_ymax: 100
   path:
-    collect-datas: data/collect/seg02/bin120/from1200to1500
-    data-for-hist: results/lightcurve/seg02/bin120/from1200to1500/data.csv
+    collect-datas: data/collect/seg01/bin120/from1200to1500
+    data-for-hist: results/lightcurve/seg01/bin120/from1200to1500/data.csv
 spectrum:
   parameters:
     grp_time: 40
-    systematic : 0.01
-    ignoreRange : "**-1.0 10.0-**"
+    systematic: 0.01
+    ignoreRange: '**-1.0 10.0-**'
+    model: true
+    only_model:
+    - ZPL
+    - ZPL+Fe
+    mc:
+      is: false
+      n: 10000
+    limit:
+      is: false
+      n: 1000
+      threshold_ratio(%): 99.73
+      detected_ratio(%): [90]
+      norm_pointed: None
+      norm_range: [3e-3, 1e4]
+      steps_per_decade: 100
   path:
     seg_list: lists/seg_list_all.txt
     base_dir: data/seg
     merge_output: results/spectrum/group_subset
     spectrums: box
     summary: results/spectrum
-    merge_list: lists/seglist_indiv/seglist_indiv-039.csv
-    merge_name: seglist_indiv-039
+    merge_list: lists/seglist_indiv/seglist_indiv-001.csv
+    merge_name: seglist_indiv-001
 spectrum02:
   path:
     list_dir: lists
-    seglistlist_csv: seglist_group02.csv
-    seglist_basename: seglist_group02
+    seglistlist_csv: seglist_indiv.csv
+    seglist_basename: seglist_indiv
+    seglist_blacklist: seglist_indiv_bl.csvaaaa
+    limit_list: limit.csv

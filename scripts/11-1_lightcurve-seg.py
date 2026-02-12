@@ -14,6 +14,21 @@ from lmfit.models import PowerLawModel
 from lmfit.models import Model
 from scripts.utils.read_config import cfg
 
+plt.rcParams.update({
+    "font.size": 24,           # 全体の基本フォントサイズ
+    "axes.titlesize": 22,      # グラフタイトルのサイズ
+    "axes.labelsize": 20,      # 軸ラベルのサイズ
+    "xtick.labelsize": 24,     # x軸目盛りのサイズ
+    "ytick.labelsize": 24,     # y軸目盛りのサイズ
+    "legend.fontsize": 16,     # 凡例のサイズ
+    "lines.linewidth": 3,      # プロット線の太さ
+    "lines.markersize": 10,    # マーカーの大きさ
+    "axes.linewidth": 2,       # グラフ枠線の太さ
+    "xtick.major.width": 2,    # 目盛り線の太さ
+    "ytick.major.width": 2,
+    "savefig.dpi": 300         # 保存時の解像度（高めに設定）
+})
+
 dirname = cfg['lightcurve']['path']['collect-datas']
 xmin = cfg['lightcurve']['parameters']['lc_xmin']
 xmax = cfg['lightcurve']['parameters']['lc_xmax']
@@ -45,26 +60,26 @@ for datafilename in list_datafilename:
     print("-"*15)
     #各データの情報を出力するか
     display_info = True
-    
+
     #各種情報の整理と出力
     header_primary = datafile['PRIMARY'].header
     header_rate = datafile['RATE'].header
-    
+
     #データの時刻系の取得
     time_system = header_rate.get('TIMESYS', 'TT').lower()
-    
+
     #NICERミッション基準時刻の取得
     mjd_ref = header_rate['MJDREFI'] + header_rate['MJDREFF']
     t_ref_absolute = Time(mjd_ref, format='mjd', scale=time_system.lower())
-    
+
     data = datafile['RATE'].data
     time = data['TIME']
     rate = data['RATE']
     error = data['ERROR']
-    
+
     time_zero_val = header_rate.get('TIMEZERO', '0.0')
     t_start_val = header_rate.get('TSTART', '0.0')
-    
+
     #base_met:そのsegIDの観測開始時点のMET
     if abs(time_zero_val) > 1e8:
       base_met = time_zero_val
@@ -72,21 +87,21 @@ for datafilename in list_datafilename:
       base_met = time_zero_val
     else:
       base_met = t_start_val + time_zero_val
-    
+
     #それぞれを時"間"に変換
     base_met_delta = u.Quantity(base_met, u.s)
     time_col_delta = u.Quantity(time, u.s)
-    
+
     #SegID開始時刻=NICER基準時刻+SegID開始までの時間
     t_seg_start = t_ref_absolute + base_met_delta
-    
+
     #データ点の絶対時刻=SegID開始時刻+観測開始からデータ点までの時間
     time_abs = t_seg_start + time_col_delta
-    
+
     segID = os.path.basename(datapath).split("_src_")[0].replace("ni", "")
     print(f"segID:{segID}")
     print(f"観測開始時刻:{t_seg_start.isot}")
-    
+
     if display_info:
       print(f"MJDREF:{mjd_ref}")
       print(f"OBJECT:{header_primary.get('OBJECT', 'N/A')}")
@@ -95,35 +110,35 @@ for datafilename in list_datafilename:
       print(f"EXPOSURE:{header_rate.get('EXPOSURE', '0.0')}")
       print(f"TIMESYS:{time_system}")
       print(f"TIMEZERO:{header_rate.get('TIMEZERO', '0.0')}")
-    
+
     if data is None or len(data) == 0:
       print(f"⚠️ Warning: No data found in {datafilename} (segID: {segID}). Skipping...")
       continue
-    
+
     #各segIDの観測開始時刻、観測終了時刻の表の作成
     _df_info = pd.DataFrame({'segID':segID, 'DATE-OBS':header_primary.get('DATE-OBS', 'N/A'), 'DATE-END':header_primary.get('DATE-END', 'N/A'), 'EXPOSURE':header_rate.get('EXPOSURE', '0.0')}, index=[0])
     df_info = pd.concat([df_info, _df_info])
-    
+
     #トリガーからの経過時間=データ点の絶対時刻-トリガー時刻
     trigger_MJD = cfg['general']['parameters']['trigger_time']
     time_abs_from_trigger = (time_abs - Time(trigger_MJD, format='mjd', scale='utc')).to_value(u.s)
-    
+
     #bin幅の取得
     bin_width = header_rate.get('TIMEDEL', 0.0)
-    
+
     duration = ((time_abs_from_trigger[-1]+bin_width)-time_abs_from_trigger[0])
     count_average = rate.mean()
     count_sum = count_average * duration
-    
+
     count_error = np.sqrt(np.sum(error**2)) / len(error)
-    
+
     segID_list = [segID for _ in range(len(time_abs_from_trigger))]
-    
+
     list_time_elapsed_indiv.extend(time_abs_from_trigger)
     list_rate_indiv.extend(rate)
     list_error_indiv.extend(error)
     list_segID_indiv.extend(segID_list)
-    
+
     list_time_elapsed_segID.append(time_abs_from_trigger[0])
     list_rate_segID.append(count_average)
     list_error_segID.append(count_error)
@@ -193,40 +208,40 @@ def BrokenPowerLawModel(x, amplitude, t_break, alpha1, alpha2):
   """
   # x < t_break の部分と x >= t_break の部分で式を変える
   # ※計算を安定させるため、t_breakで正規化して繋げることが多いです
-  
+
   x = np.array(x, dtype=float)
-  
+
   if t_break <= 0:
     return np.ones_like(x) * 1e30
-  
+
   model_output = np.zeros_like(x, dtype=float)
-  
+
   # ブレイク前
   mask1 = x < t_break
   if np.any(mask1):
     model_output[mask1] = amplitude * (x[mask1] / t_break) ** (-alpha1)
-  
+
   # ブレイク後
   mask2 = x >= t_break
   if np.any(mask2):
     model_output[mask2] = amplitude * (x[mask2] / t_break) ** (-alpha2)
-  
+
   return model_output
 
 if tf:
   valid_mask = (x_data > 0) & (error_data > 0) & np.isfinite(y_data)
-  
+
   if np.sum(valid_mask) == 0:
     print("Error: No valid data points for fitting (all errors are 0 or x <= 0).")
     sys.exit(1)
-  
+
   segID_safe = segID_data[valid_mask]
   x_safe = x_data[valid_mask]
   y_safe = y_data[valid_mask]
   error_safe = error_data[valid_mask]
-  
+
   weights = 1.0 / error_safe
-  
+
   for _ in range(5):
     try:
       tf_model = input("Enter 1 to use Broken Power Law Model, or 0 Power Law Model (default is 0).:")
@@ -240,12 +255,12 @@ if tf:
       break
   else:
     print("Processing interrupted.")
-  
+
   if tf_model:
     model_name = "Broken Power Law"
     model = Model(BrokenPowerLawModel)
     params = model.make_params()
-    
+
     params['t_break'].set(value=(np.min(x_safe) + np.max(x_safe)) / 2, min=np.min(x_safe), max=np.max(x_safe))
     params['amplitude'].set(value=y_safe[0], min=0)
     params['alpha1'].set(value=1.0, min=-10, max=10)
@@ -254,7 +269,7 @@ if tf:
     model_name = "Power Law"
     model = PowerLawModel()
     params = model.guess(y_safe, x=x_safe)
-  
+
   result = model.fit(y_safe, params, x=x_safe, weights=weights)
   print(result.fit_report())
 
@@ -263,7 +278,7 @@ if tf:
 
 #the Fermi-GBM trigger time (t0; 2022 October 9 at 13:16:59.99 UTC)
 ax.set_title(f"GRB221009A's Light Curve({os.path.basename(dirname)})")
-ax.set_xlabel('Elapsed Time from the Fermi-GBM trigger(2022 October 9 at 13:16:59.99 UTC) (seconds)')
+ax.set_xlabel('Elapsed Time from the Fermi-GBM trigger\n(2022 October 9 at 13:16:59.99 UTC) (seconds)')
 ax.set_ylabel('Rate (counts/s)')
 ax.set_xscale('log')
 ax.set_yscale('log')
@@ -272,14 +287,14 @@ ax.set_ylim(ymin, ymax)
 #ax.set_xlim(datetime(2022, 10, 9, 0, 0, 0), datetime(2022, 10, 30, 0, 0, 0))
 
 #ax.grid(True, which='both', linestyle=':', alpha=0.6)
-ax.axhline(0.094, linestyle='--', color="black", alpha=0.5)
+#ax.axhline(0.094, linestyle='--', color="black", alpha=0.5)
 ax.minorticks_on()
 
 #date_form = mdates.DateFormatter('%Y/%m/%d %H')
 #ax.xaxis.set_major_formatter(date_form)
 #fig.autofmt_xdate()
 
-ax.legend()
+#ax.legend()
 plt.tight_layout()
 
 #各種データの保存

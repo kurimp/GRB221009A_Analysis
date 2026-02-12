@@ -18,6 +18,7 @@ xsel_timefile.asc
 manual/
 memo.txt
 pptx/
+*.png
 
 # --- 2. 一時ファイル・ログを無視 ---
 *.log

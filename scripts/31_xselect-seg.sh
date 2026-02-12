@@ -14,8 +14,8 @@ echo "Reading ObsIDs from ${LIST_FILE}..."
 
 # --- 設定パラメータ ---
 BINSIZE=120
-PI_MIN=1200
-PI_MAX=1500
+PI_MIN=30
+PI_MAX=1000
 # --------------------
 
 echo "Settings: BinSize=${BINSIZE}s, PI=${PI_MIN}-${PI_MAX}"

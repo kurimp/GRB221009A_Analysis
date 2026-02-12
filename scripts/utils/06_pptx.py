@@ -31,18 +31,31 @@ prs.slide_height = slide_height
 
 blank_slide_layout = prs.slide_layouts[6]
 
-#figureの設定
-figure_left, figure_top = space_left, space_up
+#figure1の設定
+figure1_left, figure1_top = space_left, space_up
+figure1_hight = (slide_height-(space_up+space_bottom))/2
+
+#figure2の設定
+figure2_left, figure2_top = figure1_left, space_up+figure1_hight
+figure2_hight = figure1_hight
 
 #tableの設定
-rows, cols = 8, 3
-table_left, table_top = figure_left + figure_width, space_up
-table_width, table_height = slide_width - (figure_left + space_right + figure_width), slide_height - (space_up + space_bottom)
+rows, cols = 9, 3
+table_left, table_top = figure1_left + figure_width, space_up
+table_width, table_height = slide_width - (figure1_left + space_right + figure_width), slide_height - (space_up + space_bottom)
 
 for row in data.itertuples():
   slide = prs.slides.add_slide(blank_slide_layout)
 
-  slide.shapes.add_picture(os.path.join(image_dir, f"{row.File}_plot_noScorpion.png"), figure_left, figure_top, width=figure_width)
+  try:
+    slide.shapes.add_picture(os.path.join(image_dir, f"spectrum_old/{row.File}_plot_noScorpion.png"), figure1_left, figure1_top, height=figure1_hight)
+  except Exception:
+    pass
+
+  try:
+    slide.shapes.add_picture(os.path.join(image_dir, f"mc_new/{row.File}_mc_hist_10000.png"), figure2_left, figure2_top, height=figure2_hight)
+  except Exception:
+    pass
 
   table = slide.shapes.add_table(rows, cols, table_left, table_top, table_width, table_height).table
 
@@ -72,8 +85,13 @@ for row in data.itertuples():
   table.cell(6, 2).text = f"{row.f_val}"
 
   table.cell(7, 0).merge(table.cell(7, 1))
-  table.cell(7, 0).text = "p_val"
-  table.cell(7, 2).text = f"{row.p_val}"
+  table.cell(7, 0).text = "p_val_ftest"
+  table.cell(7, 2).text = f"{row.p_val_ftest}"
+
+  table.cell(8, 0).merge(table.cell(8, 1))
+  table.cell(8, 0).text = "p_val_mc"
+  table.cell(8, 2).text = f"{row.p_val_mc}"
+
   for row in table.rows:
     row.height = Cm(1.0)
     row.width = Cm(3.0)
