@@ -3,6 +3,9 @@ general:
     trigger_time: 59861.55347211
     ra: 288.2643
     dec: 19.7712
+    BIN: 120
+    PI_MIN: 30
+    PI_MAX: 1000
 segment:
   parameters:
     is_obs_seg: seg
@@ -10,10 +13,9 @@ segment:
     PI_MIN: 30
     PI_MAX: 1000
   path:
-    result_root: results/lightcurve/segments
     obs_list_name: segInfo_fixed.csv
     result_time_dir: time_fixed
-    collect_dir: seg01
+    collect_dir: obs
 lightcurve:
   parameters:
     lc_xmin: 10000

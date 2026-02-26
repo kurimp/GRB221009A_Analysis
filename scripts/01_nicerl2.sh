@@ -12,7 +12,7 @@ do
 done
 
 # --- ディレクトリリストの読み込み ---
-LIST_FILE="scripts/obs_list.txt"
+LIST_FILE="lists/obs_list.txt"
 
 if [ ! -f "$LIST_FILE" ]; then
   echo "Error: List file '${LIST_FILE}' not found."

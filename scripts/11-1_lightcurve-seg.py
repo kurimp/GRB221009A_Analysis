@@ -29,11 +29,17 @@ plt.rcParams.update({
     "savefig.dpi": 300         # 保存時の解像度（高めに設定）
 })
 
-dirname = cfg['lightcurve']['path']['collect-datas']
+BIN =cfg['general']['parameters']['BIN']
+PI_MIN = cfg['general']['parameters']['PI_MIN']
+PI_MAX = cfg['general']['parameters']['PI_MAX']
+collect_dir = cfg['segment']['path']['collect_dir']
+
 xmin = cfg['lightcurve']['parameters']['lc_xmin']
 xmax = cfg['lightcurve']['parameters']['lc_xmax']
 ymin = cfg['lightcurve']['parameters']['lc_ymin']
 ymax = cfg['lightcurve']['parameters']['lc_ymax']
+
+dirname = os.path.join("data", "collect", collect_dir, f"bin{BIN}", f"from{PI_MIN}to{PI_MAX}")
 
 # --- 確認用出力 ---
 print(f"Data Directory: {dirname}")
